@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
  * Copyright (C) 2013 Red Hat
  * Author: Rob Clark <robdclark@gmail.com>
  *
@@ -49,6 +49,13 @@
 #include "msm_mmu.h"
 #include "sde_wb.h"
 #include "sde_dbg.h"
+#if defined(OPLUS_FEATURE_PXLW_IRIS5) || defined(OPLUS_FEATURE_PXLW_SOFT_IRIS)
+#include "dsi/iris/dsi_iris5_api.h"
+#endif
+
+#ifdef OPLUS_BUG_STABILITY
+#include "oplus_adfr.h"
+#endif
 
 /*
  * MSM driver version:
@@ -412,6 +419,12 @@ static int msm_drm_uninit(struct device *dev)
 		}
 	}
 
+#ifdef OPLUS_BUG_STABILITY
+	if (oplus_adfr_is_support()) {
+		oplus_adfr_thread_destroy(priv);
+	}
+#endif
+
 	drm_kms_helper_poll_fini(ddev);
 	if (kms && kms->funcs)
 		kms->funcs->debugfs_destroy(kms);
@@ -696,6 +709,19 @@ static int msm_drm_display_thread_create(struct sched_param param,
 		return ret;
 	}
 
+#ifdef OPLUS_BUG_STABILITY
+	/**
+	 * Use a seperate adfr thread for fake frame.
+	 * Because fake frame maybe causes crtc commit/event more heavy.
+	 * This can lead to commit miss TE/retire event delay
+	 */
+	if (oplus_adfr_is_support()) {
+		if (oplus_adfr_thread_create(&param, priv, ddev, dev)) {
+			return -EINVAL;
+		}
+	}
+#endif
+
 	return 0;
 
 }
@@ -886,12 +912,12 @@ static int msm_drm_component_init(struct device *dev)
 		}
 	}
 
-	drm_mode_config_reset(ddev);
-
 	ret = drm_dev_register(ddev, 0);
 	if (ret)
 		goto fail;
 	priv->registered = true;
+
+	drm_mode_config_reset(ddev);
 
 	if (kms && kms->funcs && kms->funcs->cont_splash_config) {
 		ret = kms->funcs->cont_splash_config(kms, NULL);
@@ -1689,6 +1715,10 @@ static const struct drm_ioctl_desc msm_ioctls[] = {
 	DRM_IOCTL_DEF_DRV(MSM_RMFB2, msm_ioctl_rmfb2, DRM_UNLOCKED),
 	DRM_IOCTL_DEF_DRV(MSM_POWER_CTRL, msm_ioctl_power_ctrl,
 			DRM_RENDER_ALLOW),
+#if defined(OPLUS_FEATURE_PXLW_IRIS5) || defined(OPLUS_FEATURE_PXLW_SOFT_IRIS)
+	DRM_IOCTL_DEF_DRV(MSM_IRIS_OPERATE_CONF, msm_ioctl_iris_operate_conf, DRM_UNLOCKED|DRM_RENDER_ALLOW),
+	DRM_IOCTL_DEF_DRV(MSM_IRIS_OPERATE_TOOL, msm_ioctl_iris_operate_tool, DRM_UNLOCKED|DRM_RENDER_ALLOW),
+#endif
 	DRM_IOCTL_DEF_DRV(MSM_DISPLAY_HINT, msm_ioctl_display_hint_ops,
 			DRM_UNLOCKED),
 };
@@ -2209,6 +2239,7 @@ static int __init msm_drm_register(void)
 static void __exit msm_drm_unregister(void)
 {
 	DBG("fini");
+
 	platform_driver_unregister(&msm_platform_driver);
 	sde_wb_unregister();
 	msm_hdmi_unregister();

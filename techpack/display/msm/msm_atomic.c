@@ -16,6 +16,10 @@
  * this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include <drm/drm_panel.h>
+#ifdef OPLUS_BUG_STABILITY
+#include <linux/msm_drm_notify.h>
+#include <linux/notifier.h>
+#endif /* OPLUS_BUG_STABILITY */
 
 #include "msm_drv.h"
 #include "msm_gem.h"
@@ -687,6 +691,16 @@ int msm_atomic_commit(struct drm_device *dev,
 			drm_atomic_set_fence_for_plane(new_plane_state, fence);
 		}
 		c->plane_mask |= (1 << drm_plane_index(plane));
+	}
+
+     /* Protection for prepare_fence callback */
+	retry:
+		ret = drm_modeset_lock(&state->dev->mode_config.connection_mutex,
+		state->acquire_ctx);
+
+	if (ret == -EDEADLK) {
+		drm_modeset_backoff(state->acquire_ctx);
+		goto retry;
 	}
 
 	/*
