@@ -8,7 +8,6 @@
 
 #include "cam_isp_hw.h"
 #include "cam_ife_csid_hw_intf.h"
-#include "cam_ife_csid_hw_intf.h"
 #include "cam_cpas_api.h"
 
 #define CAM_VFE_HW_NUM_MAX            7
@@ -141,7 +140,6 @@ struct cam_vfe_hw_vfe_bus_rd_acquire_args {
  *                           (Default is Master in case of Single VFE)
  * @dual_slave_core:         If Master and Slave exists, HW Index of Slave
  * @cdm_ops:                 CDM operations
- * @disable_ubwc_comp:       Disable UBWC compression
  */
 struct cam_vfe_hw_vfe_out_acquire_args {
 	struct cam_isp_resource_node         *rsrc_node;
@@ -152,7 +150,6 @@ struct cam_vfe_hw_vfe_out_acquire_args {
 	uint32_t                              is_master;
 	uint32_t                              dual_slave_core;
 	struct cam_cdm_utils_ops             *cdm_ops;
-	bool                                  disable_ubwc_comp;
 };
 
 /*

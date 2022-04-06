@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/slab.h>
@@ -189,30 +189,6 @@ static int cam_vfe_top_ver3_clock_update(
 
 	return rc;
 }
-
-static int cam_vfe_top_ver3_dump_info(
-	struct cam_vfe_top_ver3_priv *top_priv, uint32_t cmd_type)
-{
-	struct cam_hw_soc_info *soc_info = top_priv->common_data.soc_info;
-
-	if (!soc_info) {
-		CAM_ERR(CAM_ISP, "Null soc_info");
-		return -EINVAL;
-	}
-
-	switch (cmd_type) {
-	case CAM_ISP_HW_DUMP_HW_SRC_CLK_RATE:
-		CAM_INFO_RATE_LIMIT(CAM_ISP, "VFE%d src_clk_rate:%luHz",
-			soc_info->index, soc_info->applied_src_clk_rate);
-		break;
-	default:
-		CAM_ERR(CAM_ISP, "cmd_type: %u not supported", cmd_type);
-		break;
-	}
-
-	return 0;
-}
-
 
 static int cam_vfe_top_ver3_blanking_update(uint32_t cmd_type,
 	void *cmd_args, uint32_t arg_size)
@@ -529,7 +505,6 @@ int cam_vfe_top_ver3_reserve(void *device_priv,
 			acquire_args->res_id &&
 			top_priv->top_common.mux_rsrc[i].res_state ==
 			CAM_ISP_RESOURCE_STATE_AVAILABLE) {
-
 			if (acquire_args->res_id == CAM_ISP_HW_VFE_IN_CAMIF) {
 				rc = cam_vfe_camif_ver3_acquire_resource(
 					&top_priv->top_common.mux_rsrc[i],
@@ -570,7 +545,6 @@ int cam_vfe_top_ver3_reserve(void *device_priv,
 	}
 
 	return rc;
-
 }
 
 int cam_vfe_top_ver3_release(void *device_priv,
@@ -754,9 +728,6 @@ int cam_vfe_top_ver3_process_cmd(void *device_priv, uint32_t cmd_type,
 	case CAM_ISP_HW_CMD_CLOCK_UPDATE:
 		rc = cam_vfe_top_ver3_clock_update(top_priv, cmd_args,
 			arg_size);
-		break;
-	case CAM_ISP_HW_DUMP_HW_SRC_CLK_RATE:
-		rc = cam_vfe_top_ver3_dump_info(top_priv, cmd_type);
 		break;
 	case CAM_ISP_HW_CMD_FE_UPDATE_IN_RD:
 		rc = cam_vfe_top_fs_update(top_priv, cmd_args,

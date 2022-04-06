@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _CAM_IFE_CSID_HW_H_
@@ -351,7 +351,6 @@ struct cam_ife_csid_csi2_tpg_reg_offset {
 	uint32_t tpg_dtn_cfg_offset;
 	uint32_t tpg_cgen_cfg_offset;
 	uint32_t tpg_cpas_ife_reg_offset;
-
 };
 struct cam_ife_csid_common_reg_offset {
 	/* MIPI CSID registers */
@@ -442,7 +441,6 @@ struct cam_ife_csid_hw_info {
 	uint32_t                                hw_dts_version;
 	uint32_t                                hw_reg_version;
 	uint32_t                                csid_max_clk;
-
 };
 
 
@@ -599,7 +597,7 @@ struct cam_csid_evt_payload {
  * @csid_udin_reset_complete: udi n completion
  * @csid_debug:               csid debug information to enable the SOT, EOT,
  *                            SOF, EOF, measure etc in the csid hw
- * @clk_rate                  Current clock rate
+ * @clk_rate                  Clock rate
  * @sof_irq_triggered:        Flag is set on receiving event to enable sof irq
  *                            incase of SOF freeze.
  * @is_resetting:             informs whether reset is started or not.

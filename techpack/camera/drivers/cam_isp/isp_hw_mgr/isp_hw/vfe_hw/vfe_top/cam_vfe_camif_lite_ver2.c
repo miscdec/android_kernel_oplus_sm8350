@@ -427,8 +427,7 @@ static int cam_vfe_camif_lite_cpas_fifo_levels_reg_dump(
 	uint32_t  val;
 
 	if (soc_private->cpas_version == CAM_CPAS_TITAN_175_V120 ||
-		soc_private->cpas_version == CAM_CPAS_TITAN_175_V130 ||
-		soc_private->cpas_version == CAM_CPAS_TITAN_165_V100) {
+		soc_private->cpas_version == CAM_CPAS_TITAN_175_V130) {
 		rc = cam_cpas_reg_read(soc_private->cpas_handle,
 				CAM_CPAS_REG_CAMNOC, 0x3A20, true, &val);
 		if (rc) {
@@ -570,7 +569,6 @@ static int cam_vfe_camif_lite_handle_irq_bottom_half(
 		ret = CAM_VFE_IRQ_STATUS_OVERFLOW;
 
 		cam_cpas_log_votes();
-
 	}
 
 	cam_vfe_camif_lite_put_evt_payload(camif_lite_priv, &payload);

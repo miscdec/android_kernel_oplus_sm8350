@@ -1645,7 +1645,6 @@ static int cam_tfe_csid_poll_stop_status(
 			if (csid_hw->rdi_res[res_id].res_state !=
 				CAM_ISP_RESOURCE_STATE_STREAMING)
 				continue;
-
 		}
 
 		CAM_DBG(CAM_ISP, "start polling CSID:%d res_id:%d",
@@ -2404,52 +2403,6 @@ static int cam_tfe_csid_set_csid_clock(
 	return 0;
 }
 
-static int cam_tfe_csid_get_csid_clock(
-	struct cam_tfe_csid_hw *csid_hw, void *cmd_args)
-{
-	struct cam_hw_soc_info   *soc_info;
-	uint32_t                 *curr_clk_rate;
-	int                       src_clk_idx;
-	int rc = 0;
-
-	if (!csid_hw)
-		return -EINVAL;
-
-	soc_info = &csid_hw->hw_info->soc_info;
-	src_clk_idx = soc_info->src_clk_idx;
-
-	curr_clk_rate = (uint32_t *)cmd_args;
-
-	rc = cam_soc_util_get_clk_rate(soc_info->clk[src_clk_idx],
-			soc_info->clk_name[src_clk_idx], curr_clk_rate);
-
-	CAM_DBG(CAM_ISP, "CSID clock rate %llu", *curr_clk_rate);
-
-	return rc;
-}
-
-static int cam_tfe_csid_set_csid_clock_dynamically(
-	struct cam_tfe_csid_hw *csid_hw, void *cmd_args)
-{
-	struct cam_hw_soc_info   *soc_info;
-	uint32_t                 *clk_rate;
-	int rc = 0;
-
-	soc_info = &csid_hw->hw_info->soc_info;
-	clk_rate = (uint32_t *)cmd_args;
-
-	CAM_DBG(CAM_ISP, "CSID clock rate %lld", *clk_rate);
-
-	rc = cam_soc_util_set_src_clk_rate(soc_info, *clk_rate);
-	if (rc) {
-		CAM_ERR(CAM_ISP,
-			"unable to set clock dynamically rate:%lld", *clk_rate);
-		return rc;
-	}
-
-	return rc;
-}
-
 static int cam_tfe_csid_get_regdump(struct cam_tfe_csid_hw *csid_hw,
 	void *cmd_args)
 {
@@ -2679,7 +2632,6 @@ static int cam_tfe_csid_log_acquire_data(
 	}
 
 	return 0;
-
 }
 
 static int cam_tfe_csid_process_cmd(void *hw_priv,
@@ -2722,12 +2674,6 @@ static int cam_tfe_csid_process_cmd(void *hw_priv,
 	case CAM_TFE_CSID_LOG_ACQUIRE_DATA:
 		rc = cam_tfe_csid_log_acquire_data(csid_hw, cmd_args);
 		break;
-	case CAM_ISP_HW_CMD_GET_CLOCK_RATE:
-		rc = cam_tfe_csid_get_csid_clock(csid_hw, cmd_args);
-		break;
-	case CAM_ISP_HW_CMD_DYNAMIC_CLOCK_UPDATE:
-		rc = cam_tfe_csid_set_csid_clock_dynamically(csid_hw, cmd_args);
-		break;
 	default:
 		CAM_ERR(CAM_ISP, "CSID:%d unsupported cmd:%d",
 			csid_hw->hw_intf->hw_idx, cmd_type);
@@ -2742,7 +2688,6 @@ static int cam_tfe_csid_get_evt_payload(
 	struct cam_tfe_csid_hw *csid_hw,
 	struct cam_csid_evt_payload **evt_payload)
 {
-
 	spin_lock(&csid_hw->spin_lock);
 
 	if (list_empty(&csid_hw->free_payload_list)) {
@@ -3198,7 +3143,6 @@ handle_fatal_error:
 	}
 
 	if (csid_hw->csid_debug & TFE_CSID_DEBUG_ENABLE_RST_IRQ_LOG) {
-
 		if (irq_status[TFE_CSID_IRQ_REG_IPP] &
 			BIT(csid_reg->cmn_reg->path_rst_done_shift_val))
 			CAM_INFO_RATE_LIMIT(CAM_ISP,
@@ -3256,11 +3200,9 @@ handle_fatal_error:
 		if (irq_status[TFE_CSID_IRQ_REG_IPP] &
 			TFE_CSID_PATH_IPP_ERROR_CCIF_VIOLATION)
 			is_error_irq = true;
-
 	}
 
 	for (i = 0; i < csid_reg->cmn_reg->num_rdis; i++) {
-
 		if ((irq_status[i] &
 			BIT(csid_reg->cmn_reg->path_rst_done_shift_val)) &&
 			(csid_hw->csid_debug &

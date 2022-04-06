@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/of.h>
@@ -476,7 +476,6 @@ void cam_cpas_log_votes(void)
 	} else {
 		CAM_ERR(CAM_CPAS, "Invalid process_cmd ops");
 	}
-
 }
 EXPORT_SYMBOL(cam_cpas_log_votes);
 

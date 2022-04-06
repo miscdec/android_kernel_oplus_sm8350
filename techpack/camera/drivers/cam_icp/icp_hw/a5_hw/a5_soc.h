@@ -18,7 +18,7 @@ struct a5_ubwc_cfg_ext {
 };
 
 struct a5_soc_info {
-	const char *fw_name;
+	char *fw_name;
 	bool ubwc_config_ext;
 	uint32_t a5_qos_val;
 	union {
@@ -38,4 +38,4 @@ int cam_a5_disable_soc_resources(struct cam_hw_soc_info *soc_info);
 
 int cam_a5_update_clk_rate(struct cam_hw_soc_info *soc_info,
 	int32_t clk_level);
-#endif
+#endif /*CAM_A5_SOC_H*/

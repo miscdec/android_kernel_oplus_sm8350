@@ -267,7 +267,6 @@ static struct cam_vfe_bus_ver2_reg_offset_ubwc_3_client
 	.mode_cfg_0       = 0x00002544,
 	.mode_cfg_1       = 0x000025A4,
 	.bw_limit         = 0x000025A0,
-	.ubwc_comp_en_bit = BIT(1),
 };
 
 static struct cam_vfe_bus_ver2_reg_offset_ubwc_3_client
@@ -281,7 +280,6 @@ static struct cam_vfe_bus_ver2_reg_offset_ubwc_3_client
 	.mode_cfg_0       = 0x00002644,
 	.mode_cfg_1       = 0x000026A4,
 	.bw_limit         = 0x000026A0,
-	.ubwc_comp_en_bit = BIT(1),
 };
 
 static struct cam_vfe_bus_ver2_reg_offset_ubwc_3_client
@@ -295,7 +293,6 @@ static struct cam_vfe_bus_ver2_reg_offset_ubwc_3_client
 	.mode_cfg_0       = 0x00003644,
 	.mode_cfg_1       = 0x000036A4,
 	.bw_limit         = 0x000036A0,
-	.ubwc_comp_en_bit = BIT(1),
 };
 
 static struct cam_vfe_bus_ver2_reg_offset_ubwc_3_client
@@ -309,7 +306,6 @@ static struct cam_vfe_bus_ver2_reg_offset_ubwc_3_client
 	.mode_cfg_0       = 0x00003744,
 	.mode_cfg_1       = 0x000037A4,
 	.bw_limit         = 0x000037A0,
-	.ubwc_comp_en_bit = BIT(1),
 };
 
 static struct cam_vfe_bus_ver2_hw_info vfe175_bus_hw_info = {
@@ -878,13 +874,11 @@ static struct cam_vfe_bus_ver2_hw_info vfe175_bus_hw_info = {
 		{
 			.comp_mask                    = 0x00002030,
 			.addr_sync_mask               = 0x0000208C,
-
 		},
 		/* CAM_VFE_BUS_VER2_COMP_GRP_DUAL_2 */
 		{
 			.comp_mask                    = 0x00002034,
 			.addr_sync_mask               = 0x00002090,
-
 		},
 		/* CAM_VFE_BUS_VER2_COMP_GRP_DUAL_3 */
 		{
@@ -1043,7 +1037,6 @@ static struct cam_vfe_hw_info cam_vfe175_hw_info = {
 
 	.camif_lite_version            = CAM_VFE_CAMIF_LITE_VER_2_0,
 	.camif_lite_reg                = &vfe175_camif_lite_reg,
-
 };
 
 #endif /* _CAM_VFE175_H_ */

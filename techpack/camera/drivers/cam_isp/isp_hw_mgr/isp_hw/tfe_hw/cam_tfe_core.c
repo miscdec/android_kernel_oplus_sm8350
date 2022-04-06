@@ -444,7 +444,6 @@ static void cam_tfe_log_error_irq_status(
 		"TFE clock rate:%d TFE total bw applied:%lld",
 		top_priv->hw_clk_rate,
 		top_priv->total_bw_applied);
-
 }
 
 static int cam_tfe_error_irq_bottom_half(
@@ -934,7 +933,6 @@ irqreturn_t cam_tfe_irq(int irq_num, void *data)
 
 end:
 	return IRQ_HANDLED;
-
 }
 
 static int cam_tfe_top_set_hw_clk_rate(
@@ -965,62 +963,6 @@ static int cam_tfe_top_set_hw_clk_rate(
 	else
 		CAM_ERR(CAM_ISP, "TFE:%d set src clock rate:%lld failed, rc=%d",
 		top_priv->common_data.soc_info->index, max_clk_rate,  rc);
-
-	return rc;
-}
-
-static int cam_tfe_top_get_hw_clk_rate(
-	struct cam_tfe_top_priv  *top_priv,
-	void                     *cmd_args,
-	uint32_t                  arg_size)
-{
-	struct cam_hw_soc_info   *soc_info;
-	uint32_t                 *curr_clk_rate;
-	int                      src_clk_idx;
-	int rc = 0;
-
-	if (!top_priv) {
-		CAM_ERR(CAM_ISP, "Error top_private NULL");
-		return -EINVAL;
-	}
-
-	soc_info = top_priv->common_data.soc_info;
-	src_clk_idx = soc_info->src_clk_idx;
-
-	curr_clk_rate = (uint32_t *)cmd_args;
-
-	rc = cam_soc_util_get_clk_rate(soc_info->clk[src_clk_idx],
-		soc_info->clk_name[src_clk_idx], curr_clk_rate);
-
-	CAM_DBG(CAM_ISP, "TFE clock rate %llu", *curr_clk_rate);
-
-	return rc;
-}
-
-static int cam_tfe_top_dynamic_clock_update(
-	struct cam_tfe_top_priv  *top_priv,
-	void                     *cmd_args,
-	uint32_t                 arg_size)
-{
-	struct cam_hw_soc_info   *soc_info;
-	int                      src_clk_idx;
-	uint32_t                 *clk_rate;
-	int rc = 0;
-
-	soc_info = top_priv->common_data.soc_info;
-	src_clk_idx = soc_info->src_clk_idx;
-
-	clk_rate = (uint32_t *)cmd_args;
-
-	CAM_DBG(CAM_ISP, "TFE clock rate %lld", *clk_rate);
-
-	rc = cam_soc_util_set_src_clk_rate(soc_info, *clk_rate);
-	if (rc) {
-		CAM_ERR(CAM_ISP,
-			"unable to set clock dynamically rate:%lld",
-			*clk_rate);
-		return rc;
-	}
 
 	return rc;
 }
@@ -1643,7 +1585,6 @@ static int cam_tfe_hw_dump(
 	mem_base = soc_info->reg_map[TFE_CORE_BASE_IDX].mem_base;
 
 	if (dump_args->is_dump_all) {
-
 		/*Dump registers size*/
 		for (i = 0; i < reg_dump_data->num_reg_dump_entries; i++)
 			reg_dump_size +=
@@ -1731,7 +1672,6 @@ static int cam_tfe_hw_dump(
 	reg_start_offset = soc_info->mem_block[TFE_CORE_BASE_IDX]->start +
 		reg_dump_data->bus_client_start_addr;
 	for (j = 0; j < reg_dump_data->num_bus_clients; j++) {
-
 		for (i = 0; i <= 0x3c; i += 4) {
 			addr[0] = reg_start_offset + i;
 			addr[1] = cam_io_r(reg_base + i);
@@ -1752,7 +1692,6 @@ static int cam_tfe_hw_dump(
 
 	/* Dump LUT entries */
 	for (i = 0; i < reg_dump_data->num_lut_dump_entries; i++) {
-
 		lut_bank_sel = reg_dump_data->lut_entry[i].lut_bank_sel;
 		lut_size = reg_dump_data->lut_entry[i].lut_addr_size;
 		lut_word_size = reg_dump_data->lut_entry[i].lut_word_size;
@@ -2454,7 +2393,6 @@ int cam_tfe_top_init(
 
 deinit_resources:
 	for (--i; i >= 0; i--) {
-
 		top_priv->in_rsrc[i].start = NULL;
 		top_priv->in_rsrc[i].stop  = NULL;
 		top_priv->in_rsrc[i].process_cmd = NULL;
@@ -2935,14 +2873,6 @@ int cam_tfe_process_cmd(void *hw_priv, uint32_t cmd_type,
 		break;
 	case CAM_ISP_HW_CMD_SET_CAMIF_DEBUG:
 		rc = cam_tfe_set_top_debug(core_info, cmd_args,
-			arg_size);
-		break;
-	case CAM_ISP_HW_CMD_GET_CLOCK_RATE:
-		rc = cam_tfe_top_get_hw_clk_rate(core_info->top_priv, cmd_args,
-			arg_size);
-		break;
-	case CAM_ISP_HW_CMD_DYNAMIC_CLOCK_UPDATE:
-		rc = cam_tfe_top_dynamic_clock_update(core_info->top_priv, cmd_args,
 			arg_size);
 		break;
 	case CAM_ISP_HW_CMD_GET_BUF_UPDATE:

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/slab.h>
@@ -26,6 +26,7 @@
 #include "cam_req_mgr_debug.h"
 #include "cam_trace.h"
 
+#define CAM_TFE_HW_ENTRIES_MAX  20
 #define CAM_TFE_HW_CONFIG_TIMEOUT 60
 #define CAM_TFE_HW_CONFIG_WAIT_MAX_TRY  3
 
@@ -303,82 +304,6 @@ static int cam_tfe_hw_mgr_init_hw_res(
 err:
 	CAM_ERR(CAM_ISP, "INIT HW res failed: (type:%d, id:%d)",
 		isp_hw_res->res_type, isp_hw_res->res_id);
-	return rc;
-}
-
-static int cam_tfe_hw_mgr_get_clock_rate(
-	struct cam_isp_hw_mgr_res   *isp_hw_res,
-	uint32_t                    *get_clock_rate)
-{
-	int i;
-	int rc = -EINVAL;
-	struct cam_hw_intf      *hw_intf;
-
-	for (i = 0; i < CAM_ISP_HW_SPLIT_MAX; i++) {
-		if (!isp_hw_res->hw_res[i])
-			continue;
-
-		hw_intf = isp_hw_res->hw_res[i]->hw_intf;
-		CAM_DBG(CAM_ISP, "hw type %d hw index:%d",
-			hw_intf->hw_type, hw_intf->hw_idx);
-		if (hw_intf && hw_intf->hw_ops.process_cmd) {
-			rc = hw_intf->hw_ops.process_cmd(
-				hw_intf->hw_priv,
-				CAM_ISP_HW_CMD_GET_CLOCK_RATE,
-				get_clock_rate,
-				sizeof(uint32_t));
-			if (rc) {
-				CAM_ERR(CAM_ISP, "Failed to get Clock rate");
-				return rc;
-			}
-		}
-	}
-
-	return rc;
-}
-
-static int cam_tfe_hw_mgr_update_clock_rate(
-	struct cam_isp_hw_mgr_res   *isp_hw_res,
-	uint32_t                    *set_clock_rate,
-	uint32_t                    *updated_clock_rate)
-{
-	int i;
-	int rc = 0;
-	struct cam_hw_intf      *hw_intf;
-
-	for (i = 0; i < CAM_ISP_HW_SPLIT_MAX; i++) {
-		if (!isp_hw_res->hw_res[i])
-			continue;
-
-		hw_intf = isp_hw_res->hw_res[i]->hw_intf;
-		CAM_DBG(CAM_ISP, "hw type %d hw index:%d",
-			hw_intf->hw_type, hw_intf->hw_idx);
-
-		if (hw_intf && hw_intf->hw_ops.process_cmd) {
-			rc = hw_intf->hw_ops.process_cmd(
-				hw_intf->hw_priv,
-				CAM_ISP_HW_CMD_DYNAMIC_CLOCK_UPDATE,
-				set_clock_rate,
-				sizeof(uint32_t));
-			if (rc) {
-				CAM_ERR(CAM_ISP, "Failed to get Clock rate");
-				return rc;
-			}
-		}
-
-		if (hw_intf && hw_intf->hw_ops.process_cmd) {
-			rc = hw_intf->hw_ops.process_cmd(
-				hw_intf->hw_priv,
-				CAM_ISP_HW_CMD_GET_CLOCK_RATE,
-				updated_clock_rate,
-				sizeof(uint32_t));
-			if (rc) {
-				CAM_ERR(CAM_ISP, "Failed to get Clock rate");
-				return rc;
-			}
-		}
-	}
-
 	return rc;
 }
 
@@ -834,7 +759,6 @@ static void cam_tfe_hw_mgr_dump_all_ctx(void)
 		}
 	}
 	mutex_unlock(&g_tfe_hw_mgr.ctx_mutex);
-
 }
 
 static void cam_tfe_mgr_add_base_info(
@@ -1062,7 +986,6 @@ static int cam_tfe_hw_mgr_acquire_res_tfe_out_pixel(
 			CAM_DBG(CAM_ISP, "resource type :0x%x res id:0x%x",
 				tfe_out_res->hw_res[j]->res_type,
 				tfe_out_res->hw_res[j]->res_id);
-
 		}
 		tfe_out_res->res_type = CAM_ISP_RESOURCE_TFE_OUT;
 		tfe_out_res->res_id = out_port->res_id;
@@ -1218,7 +1141,6 @@ static int cam_tfe_hw_mgr_acquire_res_tfe_in(
 				hw_intf->hw_idx,
 				tfe_src_res->hw_res[i]->res_type,
 				tfe_src_res->hw_res[i]->res_id);
-
 		}
 		csid_res->num_children++;
 	}
@@ -1281,7 +1203,6 @@ static int cam_tfe_hw_mgr_acquire_res_tfe_csid_pxl(
 	/* Try acquiring CSID resource from previously acquired HW */
 	list_for_each_entry(csid_res_iterator, &tfe_ctx->res_list_tfe_csid,
 		list) {
-
 		for (i = 0; i < CAM_ISP_HW_SPLIT_MAX; i++) {
 			if (!csid_res_iterator->hw_res[i])
 				continue;
@@ -1594,7 +1515,6 @@ static int cam_tfe_hw_mgr_acquire_res_tfe_csid_rdi(
 		/* Try acquiring CSID resource from previously acquired HW */
 		list_for_each_entry(csid_res_iterator,
 			&tfe_ctx->res_list_tfe_csid, list) {
-
 			for (i = 0; i < CAM_ISP_HW_SPLIT_MAX; i++) {
 				if (!csid_res_iterator->hw_res[i])
 					continue;
@@ -1900,111 +1820,6 @@ void cam_tfe_cam_cdm_callback(uint32_t handle, void *userdata,
 	}
 }
 
-int cam_tfe_cshiphy_callback(
-	struct cam_tfe_hw_mgr_ctx *ctx, void *cmd_args)
-{
-	int                          rc = -EINVAL;
-	struct cam_isp_hw_mgr_res    *hw_mgr_res;
-	uint32_t                     *phy_clock_rate;
-	uint32_t                     clock_rate = 0;
-	uint32_t                     csid_clock_rate = 0, tfe_clock_rate = 0;
-	uint32_t                     updated_tfe_clk = 0, updated_csid_clk = 0;
-
-	if (!ctx || !cmd_args) {
-		CAM_ERR(CAM_ISP, "Invalid arguments");
-		return -EINVAL;
-	}
-
-	phy_clock_rate = (uint32_t *)cmd_args;
-	CAM_DBG(CAM_ISP, "clk rate csid ... in ctx id:%d",
-		ctx->ctx_index);
-	list_for_each_entry(hw_mgr_res, &ctx->res_list_tfe_csid, list) {
-		rc = cam_tfe_hw_mgr_get_clock_rate(hw_mgr_res,
-			&clock_rate);
-		if (rc) {
-			CAM_ERR(CAM_ISP,
-				"Can not get CSID clock rate(id :%d)",
-				hw_mgr_res->res_id);
-			return rc;
-		}
-
-		if (!csid_clock_rate)
-			csid_clock_rate = clock_rate;
-
-		if (clock_rate < csid_clock_rate)
-			csid_clock_rate = clock_rate;
-
-		CAM_DBG(CAM_ISP, "clk rate csid: %lld %lld",
-			clock_rate, csid_clock_rate);
-	}
-
-	CAM_DBG(CAM_ISP, "clk rate TFE in resource ctx id:%d",
-		ctx->ctx_index);
-	list_for_each_entry(hw_mgr_res, &ctx->res_list_tfe_in, list) {
-		rc = cam_tfe_hw_mgr_get_clock_rate(hw_mgr_res,
-			&clock_rate);
-		if (rc) {
-			CAM_ERR(CAM_ISP,
-				"Can not get TFE clock rate (%d)",
-				hw_mgr_res->res_id);
-			return rc;
-		}
-
-		if (!tfe_clock_rate)
-			tfe_clock_rate = clock_rate;
-
-		if (clock_rate < tfe_clock_rate)
-			tfe_clock_rate = clock_rate;
-
-		CAM_DBG(CAM_ISP, "clk rate tfe: %lld %lld",
-			clock_rate, tfe_clock_rate);
-	}
-
-	if (*phy_clock_rate > csid_clock_rate) {
-		list_for_each_entry(hw_mgr_res,
-		&ctx->res_list_tfe_csid, list) {
-			rc = cam_tfe_hw_mgr_update_clock_rate(hw_mgr_res,
-				phy_clock_rate, &updated_csid_clk);
-		}
-
-		if (updated_csid_clk > tfe_clock_rate) {
-			list_for_each_entry(hw_mgr_res,
-			&ctx->res_list_tfe_in, list) {
-				rc = cam_tfe_hw_mgr_update_clock_rate(hw_mgr_res,
-					&updated_csid_clk, &updated_tfe_clk);
-			}
-		}
-		goto end;
-	}
-
-	if (csid_clock_rate > tfe_clock_rate) {
-		list_for_each_entry(hw_mgr_res,
-		&ctx->res_list_tfe_in, list) {
-			rc = cam_tfe_hw_mgr_update_clock_rate(hw_mgr_res,
-				&csid_clock_rate, &updated_tfe_clk);
-		}
-	}
-
-	if (!updated_csid_clk)
-		updated_csid_clk = csid_clock_rate;
-
-	if (!updated_tfe_clk)
-		updated_tfe_clk = tfe_clock_rate;
-end:
-	/* final check */
-	if ((*phy_clock_rate > updated_csid_clk) ||
-		(updated_csid_clk > updated_tfe_clk) ||
-		(*phy_clock_rate > updated_tfe_clk)) {
-		CAM_ERR(CAM_ISP,
-			"improper clock rates, phy:%lld csid:%lld tfe:%lld",
-			*phy_clock_rate, updated_csid_clk, updated_tfe_clk);
-
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
 /* entry function: acquire_hw */
 static int cam_tfe_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 {
@@ -2164,7 +1979,6 @@ static int cam_tfe_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 
 	/* acquire HW resources */
 	for (i = 0; i < acquire_hw_info->num_inputs; i++) {
-
 		if (in_port->num_out_res > CAM_TFE_HW_OUT_RES_MAX) {
 			CAM_ERR(CAM_ISP, "too many output res %d",
 				in_port->num_out_res);
@@ -2674,7 +2488,6 @@ static int cam_tfe_mgr_config_hw(void *hw_mgr_priv,
 
 	for (i = 0; i < CAM_TFE_HW_NUM_MAX; i++) {
 		if (hw_update_data->bw_config_valid[i] == true) {
-
 			CAM_DBG(CAM_ISP, "idx=%d, bw_config_version=%d",
 				ctx->ctx_index, i,
 				hw_update_data->bw_config_version);
@@ -3439,7 +3252,6 @@ static int cam_tfe_mgr_user_dump_hw(
 
 static int cam_tfe_mgr_dump(void *hw_mgr_priv, void *args)
 {
-
 	struct cam_isp_hw_dump_args isp_hw_dump_args;
 	struct cam_hw_dump_args *dump_args = (struct cam_hw_dump_args *)args;
 	struct cam_isp_hw_mgr_res            *hw_mgr_res;
@@ -4638,7 +4450,6 @@ static void cam_tfe_mgr_print_io_bufs(struct cam_tfe_hw_mgr  *hw_mgr,
 		uint32_t res_id, struct cam_packet *packet,
 		bool    *ctx_found, struct cam_tfe_hw_mgr_ctx *ctx)
 {
-
 	struct cam_buf_io_cfg  *io_cfg = NULL;
 	int32_t      mmu_hdl, iommu_hdl, sec_mmu_hdl;
 	dma_addr_t   iova_addr;
@@ -4876,8 +4687,6 @@ static void cam_tfe_mgr_dump_pf_data(
 outportlog:
 	cam_tfe_mgr_print_io_bufs(hw_mgr, *resource_type, packet,
 		ctx_found, ctx);
-
-
 }
 
 static int cam_tfe_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
@@ -4941,9 +4750,6 @@ static int cam_tfe_mgr_cmd(void *hw_mgr_priv, void *cmd_args)
 		case CAM_ISP_HW_MGR_GET_LAST_CDM_DONE:
 			isp_hw_cmd_args->u.last_cdm_done =
 				ctx->last_cdm_done_req;
-			break;
-		case CAM_ISP_HW_MGR_CMD_UPDATE_CLOCK:
-			rc = cam_tfe_cshiphy_callback(ctx, isp_hw_cmd_args->cmd_data);
 			break;
 		default:
 			CAM_ERR(CAM_ISP, "Invalid HW mgr command:0x%x",
@@ -5259,7 +5065,6 @@ static bool cam_tfe_hw_mgr_is_ctx_affected(
 	uint32_t                    *affected_core,
 	uint32_t                     size)
 {
-
 	bool                  rc = false;
 	uint32_t              i = 0, j = 0;
 	uint32_t              max_idx =  tfe_hwr_mgr_ctx->num_base;
@@ -5353,7 +5158,7 @@ static int  cam_tfe_hw_mgr_find_affected_ctx(
 		 */
 		if (notify_err_cb) {
 			notify_err_cb(tfe_hwr_mgr_ctx->common.cb_priv,
-			CAM_ISP_HW_EVENT_ERROR, (void *)error_event_data);
+			CAM_ISP_HW_EVENT_ERROR, error_event_data);
 		} else {
 			CAM_WARN(CAM_ISP, "Error call back is not set");
 			goto end;
@@ -5381,7 +5186,6 @@ static int cam_tfe_hw_mgr_handle_csid_event(
 	 */
 	switch (event_info->err_type) {
 	case CAM_ISP_HW_ERROR_CSID_FATAL: {
-
 		if (!g_tfe_hw_mgr.debug_cfg.enable_csid_recovery)
 			break;
 
@@ -5487,7 +5291,7 @@ static int cam_tfe_hw_mgr_handle_hw_rup(
 		if (atomic_read(&tfe_hw_mgr_ctx->overflow_pending))
 			break;
 		tfe_hwr_irq_rup_cb(tfe_hw_mgr_ctx->common.cb_priv,
-			CAM_ISP_HW_EVENT_REG_UPDATE, (void *)&rup_event_data);
+			CAM_ISP_HW_EVENT_REG_UPDATE, &rup_event_data);
 		break;
 
 	default:
@@ -5519,8 +5323,7 @@ static int cam_tfe_hw_mgr_handle_hw_epoch(
 		if (atomic_read(&tfe_hw_mgr_ctx->overflow_pending))
 			break;
 		tfe_hw_irq_epoch_cb(tfe_hw_mgr_ctx->common.cb_priv,
-			CAM_ISP_HW_EVENT_EPOCH,
-			(void *)&epoch_done_event_data);
+			CAM_ISP_HW_EVENT_EPOCH, &epoch_done_event_data);
 		break;
 
 	case CAM_ISP_HW_TFE_IN_RDI0:
@@ -5561,7 +5364,7 @@ static int cam_tfe_hw_mgr_handle_hw_sof(
 			break;
 
 		tfe_hw_irq_sof_cb(tfe_hw_mgr_ctx->common.cb_priv,
-			CAM_ISP_HW_EVENT_SOF, (void *)&sof_done_event_data);
+			CAM_ISP_HW_EVENT_SOF, &sof_done_event_data);
 
 		break;
 
@@ -5576,7 +5379,7 @@ static int cam_tfe_hw_mgr_handle_hw_sof(
 		if (atomic_read(&tfe_hw_mgr_ctx->overflow_pending))
 			break;
 		tfe_hw_irq_sof_cb(tfe_hw_mgr_ctx->common.cb_priv,
-			CAM_ISP_HW_EVENT_SOF, (void *)&sof_done_event_data);
+			CAM_ISP_HW_EVENT_SOF, &sof_done_event_data);
 		break;
 
 	default:
@@ -5607,7 +5410,7 @@ static int cam_tfe_hw_mgr_handle_hw_eof(
 		if (atomic_read(&tfe_hw_mgr_ctx->overflow_pending))
 			break;
 		tfe_hw_irq_eof_cb(tfe_hw_mgr_ctx->common.cb_priv,
-			CAM_ISP_HW_EVENT_EOF, (void *)&eof_done_event_data);
+			CAM_ISP_HW_EVENT_EOF, &eof_done_event_data);
 
 		break;
 
@@ -5650,7 +5453,7 @@ static int cam_tfe_hw_mgr_handle_hw_buf_done(
 	if (buf_done_event_data.num_handles > 0 && tfe_hwr_irq_wm_done_cb) {
 		CAM_DBG(CAM_ISP, "Notify ISP context");
 		tfe_hwr_irq_wm_done_cb(tfe_hw_mgr_ctx->common.cb_priv,
-			CAM_ISP_HW_EVENT_DONE, (void *)&buf_done_event_data);
+			CAM_ISP_HW_EVENT_DONE, &buf_done_event_data);
 	}
 
 	CAM_DBG(CAM_ISP, "Buf done for out_res->res_id: 0x%x",
@@ -5789,9 +5592,9 @@ static int cam_tfe_hw_mgr_debug_register(void)
 	int rc = 0;
 	struct dentry *dbgfileptr = NULL;
 
-	dbgfileptr = debugfs_create_dir("camera_tfe", NULL);
+	dbgfileptr = debugfs_create_dir("camera_ife", NULL);
 	if (!dbgfileptr) {
-		CAM_ERR(CAM_ISP,"DebugFS could not create directory!");
+		CAM_ERR(CAM_ISP, "DebugFS could not create directory!");
 		rc = -ENOENT;
 		goto end;
 	}
@@ -5980,7 +5783,7 @@ int cam_tfe_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)
 
 		g_tfe_hw_mgr.ctx_pool[i].cdm_cmd =
 			kzalloc(((sizeof(struct cam_cdm_bl_request)) +
-				((CAM_ISP_CTX_CFG_MAX - 1) *
+				((CAM_TFE_HW_ENTRIES_MAX - 1) *
 				 sizeof(struct cam_cdm_bl_cmd))), GFP_KERNEL);
 		if (!g_tfe_hw_mgr.ctx_pool[i].cdm_cmd) {
 			rc = -ENOMEM;

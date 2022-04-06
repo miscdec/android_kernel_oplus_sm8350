@@ -77,7 +77,7 @@ static struct cam_camnoc_irq_err
 };
 
 
-// TODO: Need to update cam_cpas_v540_100_camnoc_specific values based on QoS
+/* TODO: Need to update cam_cpas_v540_100_camnoc_specific values based on QoS */
 static struct cam_camnoc_specific
 	cam_cpas_v540_100_camnoc_specific[] = {
 	{
@@ -238,8 +238,4 @@ static struct cam_camnoc_info cam540_cpas100_camnoc_info = {
 	.errata_wa_list = NULL,
 };
 
-static struct cam_cpas_camnoc_qchannel cam540_cpas100_qchannel_info = {
-	.qchannel_ctrl   = 0x14,
-	.qchannel_status = 0x18,
-};
 #endif /* _CPASTOP_V540_100_H_ */

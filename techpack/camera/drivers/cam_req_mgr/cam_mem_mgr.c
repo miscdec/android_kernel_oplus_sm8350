@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -52,7 +52,6 @@ static void cam_mem_mgr_print_tbl(void)
 				tbl.bufq[i].len);
 		}
 	}
-
 }
 
 static int cam_mem_util_get_dma_dir(uint32_t flags)
@@ -140,7 +139,7 @@ static int cam_mem_mgr_create_debug_fs(void)
 
 	dbgfileptr = debugfs_create_dir("camera_memmgr", NULL);
 	if (!dbgfileptr) {
-		CAM_ERR(CAM_MEM,"DebugFS could not create directory!");
+		CAM_ERR(CAM_MEM, "DebugFS could not create directory!");
 		rc = -ENOENT;
 		goto end;
 	}
@@ -165,11 +164,6 @@ int cam_mem_mgr_init(void)
 	int bitmap_size;
 
 	memset(tbl.bufq, 0, sizeof(tbl.bufq));
-
-	if (cam_smmu_need_force_alloc_cached(&tbl.force_cache_allocs)) {
-		CAM_ERR(CAM_MEM, "Error in getting force cache alloc flag");
-		return -EINVAL;
-	}
 
 	bitmap_size = BITS_TO_LONGS(CAM_MEM_BUFQ_MAX) * sizeof(long);
 	tbl.bitmap = kzalloc(bitmap_size, GFP_KERNEL);
@@ -420,9 +414,6 @@ static int cam_mem_util_get_dma_buf(size_t len,
 		return -EINVAL;
 	}
 
-	if (tbl.force_cache_allocs && (!(flags & ION_FLAG_SECURE)))
-		flags |= ION_FLAG_CACHED;
-
 	*buf = ion_alloc(len, heap_id_mask, flags);
 	if (IS_ERR_OR_NULL(*buf))
 		return -ENOMEM;
@@ -449,9 +440,6 @@ static int cam_mem_util_get_dma_buf_fd(size_t len,
 
 	if (tbl.alloc_profile_enable)
 		CAM_GET_TIMESTAMP(ts1);
-
-	if (tbl.force_cache_allocs && (!(flags & ION_FLAG_SECURE)))
-		flags |= ION_FLAG_CACHED;
 
 	*buf = ion_alloc(len, heap_id_mask, flags);
 	if (IS_ERR_OR_NULL(*buf))
@@ -636,16 +624,19 @@ static int cam_mem_util_map_hw_va(uint32_t flags,
 
 	return rc;
 multi_map_fail:
-	if (flags & CAM_MEM_FLAG_PROTECTED_MODE)
-		for (--i; i >= 0; i--)
+	if (flags & CAM_MEM_FLAG_PROTECTED_MODE) {
+		for (--i; i >= 0; i--) {
 			cam_smmu_unmap_stage2_iova(mmu_hdls[i], fd);
-	else
-		for (--i; i >= 0; i--)
+		}
+	}
+	else {
+		for (--i; i >= 0; i--) {
 			cam_smmu_unmap_user_iova(mmu_hdls[i],
 				fd,
 				CAM_SMMU_REGION_IO);
+		}
+	}
 	return rc;
-
 }
 
 int cam_mem_mgr_alloc_and_map(struct cam_mem_mgr_alloc_cmd *cmd)
@@ -698,7 +689,6 @@ int cam_mem_mgr_alloc_and_map(struct cam_mem_mgr_alloc_cmd *cmd)
 	if ((cmd->flags & CAM_MEM_FLAG_HW_READ_WRITE) ||
 		(cmd->flags & CAM_MEM_FLAG_HW_SHARED_ACCESS) ||
 		(cmd->flags & CAM_MEM_FLAG_PROTECTED_MODE)) {
-
 		enum cam_smmu_region_id region;
 
 		if (cmd->flags & CAM_MEM_FLAG_HW_READ_WRITE)
