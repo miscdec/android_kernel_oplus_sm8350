@@ -668,6 +668,7 @@ static int msm_vidc_pm_suspend(struct device *dev)
 	int rc = 0;
 	struct msm_vidc_core *core;
 
+        d_vpr_h("%s\n", __func__);
 	/*
 	 * Bail out if
 	 * - driver possibly not probed yet
@@ -689,6 +690,8 @@ static int msm_vidc_pm_suspend(struct device *dev)
 		rc = 0;
 	else if (rc)
 		d_vpr_e("Failed to suspend: %d\n", rc);
+        else
+		core->pm_suspended  = true;
 
 
 	return rc;
@@ -696,7 +699,25 @@ static int msm_vidc_pm_suspend(struct device *dev)
 
 static int msm_vidc_pm_resume(struct device *dev)
 {
+        struct msm_vidc_core *core;
 	d_vpr_h("%s\n", __func__);
+	/*
+	 * Bail out if
+	 * - driver possibly not probed yet
+	 * - not the main device. We don't support power management on
+	 *   subdevices (e.g. context banks)
+	 */
+	if (!dev || !dev->driver ||
+		!of_device_is_compatible(dev->of_node, "qcom,msm-vidc"))
+		return 0;
+
+	core = dev_get_drvdata(dev);
+	if (!core) {
+		d_vpr_e("%s: invalid core\n", __func__);
+		return -EINVAL;
+	}
+	core->pm_suspended  = false;
+
 	return 0;
 }
 
