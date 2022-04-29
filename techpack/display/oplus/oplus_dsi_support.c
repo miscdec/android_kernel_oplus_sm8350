@@ -79,6 +79,10 @@ int set_oplus_display_vendor(const char *display_name)
 		oplus_display_vendor = OPLUS_SAMSUNG_ONEPLUS_DISPLAY_FHD_DSC_CMD_PANEL;
 		//register_device_proc("lcd", "oneplus", "samsung1024");
 
+	} else if (!strcmp(display_name, "qcom,mdss_dsi_samsung_oplus_dsc_cmd")) {
+		oplus_display_vendor = OPLUS_SAMSUNG_DISPLAY_FHD_DSC_CMD_PANEL;
+		/*register_device_proc("lcd", "oplus", "samsung1024");*/
+
 	} else {
 		oplus_display_vendor = OPLUS_DISPLAY_UNKNOW;
 		pr_err("%s panel vendor info set failed!", __func__);
