@@ -16,6 +16,7 @@ if (!is_support_chip(chip)) { \
 
 typedef enum{
     UNKNOWN = 0,
+    NQ310,
     NQ330,
     SN100T,
     SN100F,

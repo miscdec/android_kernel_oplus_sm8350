@@ -12,7 +12,7 @@
 #include <linux/soc/qcom/smem.h>
 #include <linux/seq_file.h>
 #include <linux/platform_device.h>
-#include <soc/oplus/oplus_project.h>
+#include <soc/oppo/oppo_project.h>
 #include <linux/io.h>
 #include <stdbool.h>
 
@@ -22,6 +22,7 @@
 
 static char current_chipset[32];
 static bool support_nfc = false;
+
 
 #if IS_MODULE(CONFIG_OPLUS_NFC)
 extern char prj_name[];
@@ -51,8 +52,8 @@ bool is_support_chip(chip_type chip)
 	}
 
 	switch(chip) {
-		case NQ330:
-			target_chipset = "NQ330";
+		case NQ310:
+			target_chipset = "PN557|NQ310|NQ330";
 			break;
 		case SN100T:
 			target_chipset = "SN100T";
@@ -67,14 +68,14 @@ bool is_support_chip(chip_type chip)
 			target_chipset = "ST54H";
 			break;
 		case PN557:
-			target_chipset = "PN557";
+			target_chipset = "PN557|NQ310|NQ330";
 			break;
 		default:
 			target_chipset = "UNKNOWN";
 			break;
 	}
 
-	if (strcmp(target_chipset, current_chipset) == 0)
+	if (strstr(target_chipset, current_chipset) != NULL)
 	{
 		ret = true;
 	}
