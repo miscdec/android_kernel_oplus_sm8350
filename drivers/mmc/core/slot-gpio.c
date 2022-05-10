@@ -38,6 +38,10 @@ static irqreturn_t mmc_gpio_cd_irqt(int irq, void *dev_id)
 #endif
 
 	host->trigger_card_event = true;
+#ifdef CONFIG_EMMC_SDCARD_OPTIMIZE
+        //Lycan.Wang@Prd.BasicDrv, 2014-07-10 Add for retry 5 times when new sdcard init error
+        host->detect_change_retry = 5;
+#endif /* CONFIG_EMMC_SDCARD_OPTIMIZE */
 	mmc_detect_change(host, msecs_to_jiffies(ctx->cd_debounce_delay_ms));
 
 	return IRQ_HANDLED;

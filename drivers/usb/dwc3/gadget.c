@@ -4373,7 +4373,12 @@ int dwc3_gadget_init(struct dwc3 *dwc)
 	dwc->gadget.speed		= USB_SPEED_UNKNOWN;
 	dwc->gadget.sg_supported	= true;
 	dwc->gadget.name		= "dwc3-gadget";
+#ifdef OPLUS_FEATURE_CHG_BASIC
+	/* hailong.Shen@BSP.CHG.Basic, 2020/12/18,  Add for usb2.1 LPM disable */
+	//dwc->gadget.lpm_capable		= true;
+#else
 	dwc->gadget.lpm_capable		= true;
+#endif
 
 	/*
 	 * FIXME We might be setting max_speed to <SUPER, however versions

@@ -14,7 +14,10 @@
 #include <linux/sys_soc.h>
 #include <linux/types.h>
 #include <soc/qcom/socinfo.h>
-
+#ifdef VENDOR_EDIT
+/*zhangchangan@BSP.Kernel.Driver, 2020/05/09, Add for fake cpu id*/
+#include <soc/oplus/system/oppo_project.h>
+#endif /* VENDOR_EDIT */
 /*
  * SoC version type with major number in the upper 16 bits and minor
  * number in the lower 16 bits.
@@ -621,6 +624,12 @@ struct soc_id {
 	const char *name;
 };
 
+#ifdef VENDOR_EDIT
+/*zhangchangan@BSP.Kernel.Driver, 2020/05/09, Add for fake cpu id*/
+static char *fake_soc_id_name = "SM8150";
+static char *real_soc_id_name = "SDM778G";
+#endif
+
 static const struct soc_id soc_id[] = {
 	{ 87, "MSM8960" },
 	{ 109, "APQ8064" },
@@ -1204,8 +1213,18 @@ static const char *socinfo_machine(unsigned int id)
 	int idx;
 
 	for (idx = 0; idx < ARRAY_SIZE(soc_id); idx++) {
+#ifndef VENDOR_EDIT
 		if (soc_id[idx].id == id)
 			return soc_id[idx].name;
+#else
+        if (soc_id[idx].id == id) {
+            if (is_confidential()) {
+                return fake_soc_id_name;
+            } else {
+                return real_soc_id_name;
+            }
+        }
+#endif /*VENDOR_EDIT*/
 	}
 
 	return NULL;

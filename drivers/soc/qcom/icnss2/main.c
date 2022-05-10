@@ -50,6 +50,12 @@
 #include "power.h"
 #include "genl.h"
 
+#ifdef OPLUS_BUG_STABILITY
+//WuGuotian@CONNECTIVITY.WIFI.HARDWARE.FTM.1776184, 2021/02/08,Add for boot wlan mode not use NV mac
+#include <soc/oppo/boot_mode.h>
+#include <soc/oplus/system/oplus_project.h>
+#endif /* OPLUS_BUG_STABILITY */
+
 #define MAX_PROP_SIZE			32
 #define NUM_LOG_PAGES			10
 #define NUM_LOG_LONG_PAGES		4
@@ -553,7 +559,12 @@ static int icnss_setup_dms_mac(struct icnss_priv *priv)
 	/* DTSI property use-nv-mac is used to force DMS MAC address for WLAN.
 	 * Thus assert on failure to get MAC from DMS even after retries
 	 */
+#ifndef OPLUS_BUG_STABILITY
+//WuGuotian@CONNECTIVITY.WIFI.HARDWARE.FTM.1776184, 2021/02/08,Add for boot wlan mode not use NV mac
 	if (priv->use_nv_mac) {
+#else
+	if ((get_boot_mode() !=  MSM_BOOT_MODE__WLAN) && priv->use_nv_mac) {
+#endif /* OPLUS_BUG_STABILITY */
 		for (i = 0; i < ICNSS_DMS_QMI_CONNECTION_WAIT_RETRY; i++) {
 			if (priv->dms.mac_valid)
 				break;
@@ -1108,16 +1119,13 @@ static int icnss_event_soc_wake_request(struct icnss_priv *priv, void *data)
 static int icnss_event_soc_wake_release(struct icnss_priv *priv, void *data)
 {
 	int ret = 0;
-	int count = 0;
 
 	if (!priv)
 		return -ENODEV;
 
-	count = atomic_dec_return(&priv->soc_wake_ref_count);
-
-	if (count) {
+	if (atomic_dec_if_positive(&priv->soc_wake_ref_count)) {
 		icnss_pr_dbg("Wake release not called. Ref count: %d",
-			     count);
+			     priv->soc_wake_ref_count);
 		return 0;
 	}
 
@@ -2744,7 +2752,8 @@ int icnss_force_wake_release(struct device *dev)
 
 	icnss_pr_dbg("Calling SOC Wake response");
 
-	if (icnss_atomic_dec_if_greater_one(&priv->soc_wake_ref_count)) {
+	if (atomic_read(&priv->soc_wake_ref_count) &&
+	    icnss_atomic_dec_if_greater_one(&priv->soc_wake_ref_count)) {
 		icnss_pr_dbg("SOC previous release pending, Ref count: %d",
 			     atomic_read(&priv->soc_wake_ref_count));
 		return 0;
@@ -3761,8 +3770,12 @@ void icnss_add_fw_prefix_name(struct icnss_priv *priv, char *prefix_name,
 		return;
 	}
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_WIFI_BDF2)
+	scnprintf(prefix_name, ICNSS_MAX_FILE_NAME, "%s", name);
+#else
 	scnprintf(prefix_name, ICNSS_MAX_FILE_NAME,
 		  QCA6750_PATH_PREFIX "%s", name);
+#endif /* CONFIG_OPLUS_FEATURE_WIFI_BDF2 */
 
 	icnss_pr_dbg("File added with prefix: %s\n", prefix_name);
 }

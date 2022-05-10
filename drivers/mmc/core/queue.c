@@ -192,7 +192,12 @@ static void mmc_queue_setup_discard(struct request_queue *q,
 {
 	unsigned max_discard;
 
+#ifdef CONFIG_EMMC_SDCARD_OPTIMIZE
+//ZhangXiao@BSP.Storage.Sdcard 2020/12/17 fix bug 662432 format too long time and cause android reboot
+	max_discard = UINT_MAX;
+#else
 	max_discard = mmc_calc_max_discard(card);
+#endif
 	if (!max_discard)
 		return;
 

@@ -633,10 +633,17 @@ static int pm8008_register_ldo(struct pm8008_regulator *pm8008_reg,
 	}
 
 	if (pm8008_reg->enable_ocp_broadcast) {
+		#ifndef OPLUS_FEATURE_CHG_BASIC
 		rc = pm8008_masked_write(pm8008_reg->regmap,
 				LDO_OCP_CTL1_REG(pm8008_reg->base),
 				LDO_OCP_BROADCAST_EN_BIT,
 				LDO_OCP_BROADCAST_EN_BIT);
+		#else
+		rc = pm8008_masked_write(pm8008_reg->regmap,
+				LDO_OCP_CTL1_REG(pm8008_reg->base),
+				LDO_OCP_BROADCAST_EN_BIT,
+				0);
+		#endif
 		if (rc < 0) {
 			pr_err("%s: failed to configure ocp broadcast rc=%d\n",
 				name, rc);

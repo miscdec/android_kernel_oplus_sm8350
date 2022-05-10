@@ -29,6 +29,10 @@
 #include "../core/core.h"
 #endif
 
+#ifdef OPLUS_FEATURE_SDCARD_INFO
+#include "sdInfo/sdinfo.h"
+#endif
+
 #define CORE_MCI_VERSION		0x50
 #define CORE_VERSION_MAJOR_SHIFT	28
 #define CORE_VERSION_MAJOR_MASK		(0xf << CORE_VERSION_MAJOR_SHIFT)
@@ -4231,6 +4235,13 @@ static int sdhci_msm_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct device_node *node = pdev->dev.of_node;
 	unsigned long flags;
+
+
+#ifdef OPLUS_FEATURE_SDCARD_INFO
+#if IS_ENABLED(CONFIG_QGKI)
+	sdcard_remove_attr_init_sysfs(&pdev->dev);
+#endif
+#endif
 
 	host = sdhci_pltfm_init(pdev, &sdhci_msm_pdata, sizeof(*msm_host));
 	if (IS_ERR(host))
