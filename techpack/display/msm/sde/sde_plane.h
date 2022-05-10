@@ -119,6 +119,9 @@ struct sde_plane_state {
 	bool const_alpha_en;
 	bool pending;
 	bool defer_prepare_fb;
+#ifdef OPLUS_BUG_STABILITY
+	bool is_skip;
+#endif /* OPLUS_BUG_STABILITY */
 	uint32_t pipe_order_flags;
 	int layout_offset;
 	enum sde_layout layout;
@@ -187,7 +190,7 @@ bool is_sde_plane_virtual(struct drm_plane *plane);
  * @set: set if true else clear
  */
 void sde_plane_ctl_flush(struct drm_plane *plane, struct sde_hw_ctl *ctl,
-		bool set);
+			 bool set);
 
 /**
  * sde_plane_restore - restore hw state if previously power collapsed
@@ -228,8 +231,8 @@ void sde_plane_set_error(struct drm_plane *plane, bool error);
  *
  */
 struct drm_plane *sde_plane_init(struct drm_device *dev,
-		uint32_t pipe, bool primary_plane,
-		unsigned long possible_crtcs, u32 master_plane_id);
+				 uint32_t pipe, bool primary_plane,
+				 unsigned long possible_crtcs, u32 master_plane_id);
 
 /**
  * sde_plane_validate_multirecti_v2 - validate the multirect planes
@@ -244,6 +247,10 @@ int sde_plane_validate_multirect_v2(struct sde_multirect_plane_states *plane);
  */
 void sde_plane_clear_multirect(const struct drm_plane_state *drm_state);
 
+#ifdef OPLUS_BUG_STABILITY
+int sde_plane_check_fingerprint_layer(const struct drm_plane_state *drm_state);
+#endif
+
 /**
  * sde_plane_validate_src_addr - validate if current sspp addr of given
  * plane is within the input address range
@@ -253,7 +260,7 @@ void sde_plane_clear_multirect(const struct drm_plane_state *drm_state);
  * @Return:	Non-zero if source pipe current address is not in input range
  */
 int sde_plane_validate_src_addr(struct drm_plane *plane,
-		unsigned long base_addr, u32 size);
+				unsigned long base_addr, u32 size);
 
 /**
  * sde_plane_wait_input_fence - wait for input fence object
@@ -271,7 +278,7 @@ int sde_plane_wait_input_fence(struct drm_plane *plane, uint32_t wait_ms);
  * Returns: 0 on success
  */
 int sde_plane_color_fill(struct drm_plane *plane,
-		uint32_t color, uint32_t alpha);
+			 uint32_t color, uint32_t alpha);
 
 /**
  * sde_plane_set_revalidate - sets revalidate flag which forces a full
@@ -304,7 +311,7 @@ bool sde_plane_is_sec_ui_allowed(struct drm_plane *plane);
  * @crtc: Pointer to DRM CRTC state object
  */
 void sde_plane_secure_ctrl_xin_client(struct drm_plane *plane,
-		struct drm_crtc *crtc);
+				      struct drm_crtc *crtc);
 
 /*
  * sde_plane_get_ubwc_error - gets the ubwc error code
@@ -325,7 +332,7 @@ void sde_plane_clear_ubwc_error(struct drm_plane *plane);
  * @enable: enable/disable flag
  */
 void sde_plane_setup_src_split_order(struct drm_plane *plane,
-		enum sde_sspp_multirect_index rect_mode, bool enable);
+				     enum sde_sspp_multirect_index rect_mode, bool enable);
 
 /*
  * sde_plane_set_sid - set VM SID for the plane
@@ -341,7 +348,7 @@ void sde_plane_set_sid(struct drm_plane *plane, u32 vm);
  * Returns: true if sys cache is required, otherwise false.
  */
 bool sde_plane_is_cache_required(struct drm_plane *plane,
-		enum sde_sys_cache_type type);
+				 enum sde_sys_cache_type type);
 
 /**
  * sde_plane_static_img_control - Switch the static image state
@@ -349,6 +356,6 @@ bool sde_plane_is_cache_required(struct drm_plane *plane,
  * @state: state to set
  */
 void sde_plane_static_img_control(struct drm_plane *plane,
-		enum sde_crtc_cache_state state);
+				  enum sde_crtc_cache_state state);
 
 #endif /* _SDE_PLANE_H_ */

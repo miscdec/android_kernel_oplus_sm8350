@@ -49,7 +49,9 @@
 #include <drm/drm_dsc.h>
 
 #include "sde_power_handle.h"
-
+#if defined(OPLUS_FEATURE_PXLW_IRIS5) || defined(OPLUS_FEATURE_PXLW_SOFT_IRIS)
+#include <drm/msm_drm_iris.h>
+#endif
 #define GET_MAJOR_REV(rev)		((rev) >> 28)
 #define GET_MINOR_REV(rev)		(((rev) >> 16) & 0xFFF)
 #define GET_STEP_REV(rev)		((rev) & 0xFFFF)
@@ -130,6 +132,9 @@ enum msm_mdp_plane_property {
 	PLANE_PROP_PREFILL_TIME,
 	PLANE_PROP_SCALER_V1,
 	PLANE_PROP_SCALER_V2,
+#ifdef OPLUS_BUG_STABILITY
+	PLANE_PROP_CUSTOM,
+#endif /* OPLUS_BUG_STABILITY */
 	PLANE_PROP_INVERSE_PMA,
 
 	/* enum/bitmask properties */
@@ -170,6 +175,9 @@ enum msm_mdp_crtc_property {
 	CRTC_PROP_SECURITY_LEVEL,
 	CRTC_PROP_IDLE_TIMEOUT,
 	CRTC_PROP_DEST_SCALER,
+#ifdef OPLUS_BUG_STABILITY
+	CRTC_PROP_CUSTOM,
+#endif
 	CRTC_PROP_CAPTURE_OUTPUT,
 
 	CRTC_PROP_IDLE_PC_STATE,
@@ -203,6 +211,9 @@ enum msm_mdp_conn_property {
 	CONNECTOR_PROP_ROI_V1,
 	CONNECTOR_PROP_BL_SCALE,
 	CONNECTOR_PROP_SV_BL_SCALE,
+#ifdef OPLUS_BUG_STABILITY
+	CONNECTOR_PROP_CUSTOM,
+#endif
 	CONNECTOR_PROP_SUPPORTED_COLORSPACES,
 
 	/* enum/bitmask properties */
@@ -213,6 +224,10 @@ enum msm_mdp_conn_property {
 	CONNECTOR_PROP_FB_TRANSLATION_MODE,
 	CONNECTOR_PROP_QSYNC_MODE,
 	CONNECTOR_PROP_CMD_FRAME_TRIGGER_MODE,
+
+#ifdef OPLUS_BUG_STABILITY
+	CONNECTOR_PROP_QSYNC_MIN_FPS,
+#endif
 
 	/* total # of properties */
 	CONNECTOR_PROP_COUNT
@@ -647,7 +662,7 @@ struct msm_compression_info {
 	enum msm_display_compression_type comp_type;
 	u32 comp_ratio;
 
-	union{
+	union {
 		struct msm_display_dsc_info dsc_info;
 		struct msm_display_vdc_info vdc_info;
 	};
@@ -805,6 +820,9 @@ struct msm_display_kickoff_params {
 struct msm_display_conn_params {
 	uint32_t qsync_mode;
 	bool qsync_update;
+#ifdef OPLUS_BUG_STABILITY
+	uint32_t qsync_dynamic_min_fps;
+#endif
 };
 
 /**
@@ -882,6 +900,10 @@ struct msm_drm_private {
 	struct msm_drm_thread disp_thread[MAX_CRTCS];
 	struct msm_drm_thread event_thread[MAX_CRTCS];
 
+#ifdef OPLUS_BUG_STABILITY
+	struct msm_drm_thread adfr_thread[MAX_CRTCS];
+#endif
+
 	struct task_struct *pp_event_thread;
 	struct kthread_worker pp_event_worker;
 
@@ -952,7 +974,7 @@ int msm_atomic_prepare_fb(struct drm_plane *plane,
 			  struct drm_plane_state *new_state);
 void msm_atomic_commit_tail(struct drm_atomic_state *state);
 int msm_atomic_commit(struct drm_device *dev,
-	struct drm_atomic_state *state, bool nonblock);
+		      struct drm_atomic_state *state, bool nonblock);
 
 /* callback from wq once fence has passed: */
 struct msm_fence_cb {
@@ -973,13 +995,13 @@ void msm_atomic_state_clear(struct drm_atomic_state *state);
 void msm_atomic_state_free(struct drm_atomic_state *state);
 
 int msm_gem_init_vma(struct msm_gem_address_space *aspace,
-		struct msm_gem_vma *vma, int npages);
+		     struct msm_gem_vma *vma, int npages);
 void msm_gem_unmap_vma(struct msm_gem_address_space *aspace,
-		struct msm_gem_vma *vma, struct sg_table *sgt,
-		unsigned int flags);
+		       struct msm_gem_vma *vma, struct sg_table *sgt,
+		       unsigned int flags);
 int msm_gem_map_vma(struct msm_gem_address_space *aspace,
-		struct msm_gem_vma *vma, struct sg_table *sgt, int npages,
-		unsigned int flags);
+		    struct msm_gem_vma *vma, struct sg_table *sgt, int npages,
+		    unsigned int flags);
 
 struct device *msm_gem_get_aspace_device(struct msm_gem_address_space *aspace);
 
@@ -987,27 +1009,27 @@ void msm_gem_address_space_put(struct msm_gem_address_space *aspace);
 
 struct msm_gem_address_space *
 msm_gem_address_space_create(struct device *dev, struct iommu_domain *domain,
-		const char *name);
+			     const char *name);
 
 /* For SDE  display */
 struct msm_gem_address_space *
 msm_gem_smmu_address_space_create(struct drm_device *dev, struct msm_mmu *mmu,
-		const char *name);
+				  const char *name);
 
 /**
  * msm_gem_add_obj_to_aspace_active_list: adds obj to active obj list in aspace
  */
 void msm_gem_add_obj_to_aspace_active_list(
-		struct msm_gem_address_space *aspace,
-		struct drm_gem_object *obj);
+	struct msm_gem_address_space *aspace,
+	struct drm_gem_object *obj);
 
 /**
  * msm_gem_remove_obj_from_aspace_active_list: removes obj from  active obj
  * list in aspace
  */
 void msm_gem_remove_obj_from_aspace_active_list(
-		struct msm_gem_address_space *aspace,
-		struct drm_gem_object *obj);
+	struct msm_gem_address_space *aspace,
+	struct drm_gem_object *obj);
 
 /**
  * msm_gem_smmu_address_space_get: returns the aspace pointer for the requested
@@ -1015,7 +1037,7 @@ void msm_gem_remove_obj_from_aspace_active_list(
  */
 struct msm_gem_address_space *
 msm_gem_smmu_address_space_get(struct drm_device *dev,
-		unsigned int domain);
+			       unsigned int domain);
 int msm_register_mmu(struct drm_device *dev, struct msm_mmu *mmu);
 void msm_unregister_mmu(struct drm_device *dev, struct msm_mmu *mmu);
 
@@ -1024,56 +1046,56 @@ void msm_unregister_mmu(struct drm_device *dev, struct msm_mmu *mmu);
  * of the domain for this aspace
  */
 void msm_gem_aspace_domain_attach_detach_update(
-		struct msm_gem_address_space *aspace,
-		bool is_detach);
+	struct msm_gem_address_space *aspace,
+	bool is_detach);
 
 /**
  * msm_gem_address_space_register_cb: function to register callback for attach
  * and detach of the domain
  */
 int msm_gem_address_space_register_cb(
-		struct msm_gem_address_space *aspace,
-		void (*cb)(void *, bool),
-		void *cb_data);
+	struct msm_gem_address_space *aspace,
+	void (*cb)(void *, bool),
+	void *cb_data);
 
 /**
  * msm_gem_address_space_register_cb: function to unregister callback
  */
 int msm_gem_address_space_unregister_cb(
-		struct msm_gem_address_space *aspace,
-		void (*cb)(void *, bool),
-		void *cb_data);
+	struct msm_gem_address_space *aspace,
+	void (*cb)(void *, bool),
+	void *cb_data);
 
 void msm_gem_submit_free(struct msm_gem_submit *submit);
 int msm_ioctl_gem_submit(struct drm_device *dev, void *data,
-		struct drm_file *file);
+			 struct drm_file *file);
 
 void msm_gem_shrinker_init(struct drm_device *dev);
 void msm_gem_shrinker_cleanup(struct drm_device *dev);
 
 void msm_gem_sync(struct drm_gem_object *obj);
 int msm_gem_mmap_obj(struct drm_gem_object *obj,
-			struct vm_area_struct *vma);
+		     struct vm_area_struct *vma);
 int msm_gem_mmap(struct file *filp, struct vm_area_struct *vma);
 vm_fault_t msm_gem_fault(struct vm_fault *vmf);
 uint64_t msm_gem_mmap_offset(struct drm_gem_object *obj);
 int msm_gem_get_iova(struct drm_gem_object *obj,
-		struct msm_gem_address_space *aspace, uint64_t *iova);
+		     struct msm_gem_address_space *aspace, uint64_t *iova);
 int msm_gem_get_and_pin_iova(struct drm_gem_object *obj,
-		struct msm_gem_address_space *aspace, uint64_t *iova);
+			     struct msm_gem_address_space *aspace, uint64_t *iova);
 uint64_t msm_gem_iova(struct drm_gem_object *obj,
-		struct msm_gem_address_space *aspace);
+		      struct msm_gem_address_space *aspace);
 void msm_gem_unpin_iova(struct drm_gem_object *obj,
-		struct msm_gem_address_space *aspace);
+			struct msm_gem_address_space *aspace);
 struct page **msm_gem_get_pages(struct drm_gem_object *obj);
 void msm_gem_put_pages(struct drm_gem_object *obj);
 void msm_gem_put_iova(struct drm_gem_object *obj,
-		struct msm_gem_address_space *aspace);
+		      struct msm_gem_address_space *aspace);
 dma_addr_t msm_gem_get_dma_addr(struct drm_gem_object *obj);
 int msm_gem_dumb_create(struct drm_file *file, struct drm_device *dev,
-		struct drm_mode_create_dumb *args);
+			struct drm_mode_create_dumb *args);
 int msm_gem_dumb_map_offset(struct drm_file *file, struct drm_device *dev,
-		uint32_t handle, uint64_t *offset);
+			    uint32_t handle, uint64_t *offset);
 struct sg_table *msm_gem_prime_get_sg_table(struct drm_gem_object *obj);
 void *msm_gem_prime_vmap(struct drm_gem_object *obj);
 void msm_gem_prime_vunmap(struct drm_gem_object *obj, void *vaddr);
@@ -1083,7 +1105,7 @@ struct drm_gem_object *msm_gem_prime_import_sg_table(struct drm_device *dev,
 int msm_gem_prime_pin(struct drm_gem_object *obj);
 void msm_gem_prime_unpin(struct drm_gem_object *obj);
 struct drm_gem_object *msm_gem_prime_import(struct drm_device *dev,
-					    struct dma_buf *dma_buf);
+		struct dma_buf *dma_buf);
 void *msm_gem_get_vaddr(struct drm_gem_object *obj);
 void *msm_gem_get_vaddr_active(struct drm_gem_object *obj);
 void msm_gem_put_vaddr(struct drm_gem_object *obj);
@@ -1092,19 +1114,19 @@ int msm_gem_cpu_prep(struct drm_gem_object *obj, uint32_t op, ktime_t *timeout);
 int msm_gem_cpu_fini(struct drm_gem_object *obj);
 void msm_gem_free_object(struct drm_gem_object *obj);
 int msm_gem_new_handle(struct drm_device *dev, struct drm_file *file,
-		uint32_t size, uint32_t flags, uint32_t *handle, char *name);
+		       uint32_t size, uint32_t flags, uint32_t *handle, char *name);
 struct drm_gem_object *msm_gem_new(struct drm_device *dev,
-		uint32_t size, uint32_t flags);
+				   uint32_t size, uint32_t flags);
 struct drm_gem_object *msm_gem_new_locked(struct drm_device *dev,
 		uint32_t size, uint32_t flags);
 void *msm_gem_kernel_new(struct drm_device *dev, uint32_t size,
-		uint32_t flags, struct msm_gem_address_space *aspace,
-		struct drm_gem_object **bo, uint64_t *iova);
+			 uint32_t flags, struct msm_gem_address_space *aspace,
+			 struct drm_gem_object **bo, uint64_t *iova);
 void *msm_gem_kernel_new_locked(struct drm_device *dev, uint32_t size,
-		uint32_t flags, struct msm_gem_address_space *aspace,
-		struct drm_gem_object **bo, uint64_t *iova);
+				uint32_t flags, struct msm_gem_address_space *aspace,
+				struct drm_gem_object **bo, uint64_t *iova);
 struct drm_gem_object *msm_gem_import(struct drm_device *dev,
-		struct dma_buf *dmabuf, struct sg_table *sgt);
+				      struct dma_buf *dmabuf, struct sg_table *sgt);
 
 __printf(2, 3)
 void msm_gem_object_set_name(struct drm_gem_object *bo, const char *fmt, ...);
@@ -1113,20 +1135,21 @@ int msm_gem_delayed_import(struct drm_gem_object *obj);
 
 void msm_framebuffer_set_keepattrs(struct drm_framebuffer *fb, bool enable);
 int msm_framebuffer_prepare(struct drm_framebuffer *fb,
-		struct msm_gem_address_space *aspace);
+			    struct msm_gem_address_space *aspace);
 void msm_framebuffer_cleanup(struct drm_framebuffer *fb,
-		struct msm_gem_address_space *aspace);
+			     struct msm_gem_address_space *aspace);
 uint32_t msm_framebuffer_iova(struct drm_framebuffer *fb,
-		struct msm_gem_address_space *aspace, int plane);
+			      struct msm_gem_address_space *aspace, int plane);
 uint32_t msm_framebuffer_phys(struct drm_framebuffer *fb, int plane);
-struct drm_gem_object *msm_framebuffer_bo(struct drm_framebuffer *fb, int plane);
+struct drm_gem_object *msm_framebuffer_bo(struct drm_framebuffer *fb,
+		int plane);
 const struct msm_format *msm_framebuffer_format(struct drm_framebuffer *fb);
 struct drm_framebuffer *msm_framebuffer_init(struct drm_device *dev,
 		const struct drm_mode_fb_cmd2 *mode_cmd,
 		struct drm_gem_object **bos);
 struct drm_framebuffer *msm_framebuffer_create(struct drm_device *dev,
 		struct drm_file *file, const struct drm_mode_fb_cmd2 *mode_cmd);
-struct drm_framebuffer * msm_alloc_stolen_fb(struct drm_device *dev,
+struct drm_framebuffer *msm_alloc_stolen_fb(struct drm_device *dev,
 		int w, int h, int p, uint32_t format);
 
 struct drm_fb_helper *msm_fbdev_init(struct drm_device *dev);
@@ -1135,7 +1158,7 @@ void msm_fbdev_free(struct drm_device *dev);
 struct hdmi;
 #if IS_ENABLED(CONFIG_DRM_MSM_HDMI)
 int msm_hdmi_modeset_init(struct hdmi *hdmi, struct drm_device *dev,
-		struct drm_encoder *encoder);
+			  struct drm_encoder *encoder);
 void __init msm_hdmi_register(void);
 void __exit msm_hdmi_unregister(void);
 #else
@@ -1152,7 +1175,7 @@ struct msm_edp;
 void __init msm_edp_register(void);
 void __exit msm_edp_unregister(void);
 int msm_edp_modeset_init(struct msm_edp *edp, struct drm_device *dev,
-		struct drm_encoder *encoder);
+			 struct drm_encoder *encoder);
 #else
 static inline void __init msm_edp_register(void)
 {
@@ -1162,7 +1185,7 @@ static inline void __exit msm_edp_unregister(void)
 }
 
 static inline int msm_edp_modeset_init(struct msm_edp *edp,
-		struct drm_device *dev, struct drm_encoder *encoder)
+				       struct drm_device *dev, struct drm_encoder *encoder)
 {
 	return -EINVAL;
 }
@@ -1178,7 +1201,7 @@ struct msm_dsi;
  * @payload: payload for the event.
  */
 void msm_mode_object_event_notify(struct drm_mode_object *obj,
-		struct drm_device *dev, struct drm_event *event, u8 *payload);
+				  struct drm_device *dev, struct drm_event *event, u8 *payload);
 #if IS_ENABLED(CONFIG_DRM_MSM_DSI)
 static inline void __init msm_dsi_register(void)
 {
@@ -1220,14 +1243,18 @@ int msm_rd_debugfs_init(struct drm_minor *minor);
 void msm_rd_debugfs_cleanup(struct msm_drm_private *priv);
 __printf(3, 4)
 void msm_rd_dump_submit(struct msm_rd_state *rd, struct msm_gem_submit *submit,
-		const char *fmt, ...);
+			const char *fmt, ...);
 int msm_perf_debugfs_init(struct drm_minor *minor);
 void msm_perf_debugfs_cleanup(struct msm_drm_private *priv);
 #else
-static inline int msm_debugfs_late_init(struct drm_device *dev) { return 0; }
+static inline int msm_debugfs_late_init(struct drm_device *dev)
+{
+	return 0;
+}
 __printf(3, 4)
-static inline void msm_rd_dump_submit(struct msm_rd_state *rd, struct msm_gem_submit *submit,
-		const char *fmt, ...) {}
+static inline void msm_rd_dump_submit(struct msm_rd_state *rd,
+				      struct msm_gem_submit *submit,
+				      const char *fmt, ...) {}
 static inline void msm_rd_debugfs_cleanup(struct msm_drm_private *priv) {}
 static inline void msm_perf_debugfs_cleanup(struct msm_drm_private *priv) {}
 #endif
@@ -1324,9 +1351,9 @@ struct clk *msm_clk_get(struct platform_device *pdev, const char *name);
 int msm_clk_bulk_get(struct device *dev, struct clk_bulk_data **bulk);
 
 struct clk *msm_clk_bulk_get_clock(struct clk_bulk_data *bulk, int count,
-	const char *name);
+				   const char *name);
 void __iomem *msm_ioremap(struct platform_device *pdev, const char *name,
-		const char *dbgname);
+			  const char *dbgname);
 unsigned long msm_iomap_size(struct platform_device *pdev, const char *name);
 void msm_iounmap(struct platform_device *dev, void __iomem *addr);
 void msm_writel(u32 data, void __iomem *addr);
@@ -1358,9 +1385,10 @@ static inline unsigned long timeout_to_jiffies(const ktime_t *timeout)
 	ktime_t now = ktime_get();
 	unsigned long remaining_jiffies;
 
-	if (ktime_compare(*timeout, now) < 0) {
+	if (ktime_compare(*timeout, now) < 0)
 		remaining_jiffies = 0;
-	} else {
+
+	else {
 		ktime_t rem = ktime_sub(*timeout, now);
 		struct timespec ts = ktime_to_timespec(rem);
 		remaining_jiffies = timespec_to_jiffies(&ts);
@@ -1370,11 +1398,11 @@ static inline unsigned long timeout_to_jiffies(const ktime_t *timeout)
 }
 
 int msm_get_mixer_count(struct msm_drm_private *priv,
-		const struct drm_display_mode *mode,
-		const struct msm_resource_caps_info *res, u32 *num_lm);
+			const struct drm_display_mode *mode,
+			const struct msm_resource_caps_info *res, u32 *num_lm);
 
 int msm_get_dsc_count(struct msm_drm_private *priv,
-		u32 hdisplay, u32 *num_dsc);
+		      u32 hdisplay, u32 *num_dsc);
 
 int msm_get_src_bpc(int chroma_format, int bpc);
 

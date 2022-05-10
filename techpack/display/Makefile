@@ -59,3 +59,4 @@ LINUXINCLUDE    += -include $(srctree)/techpack/display/config/monacodispconf.h
 endif
 
 obj-$(CONFIG_DRM_MSM) += msm/
+#obj-$(CONFIG_DRM_OPLUS) += oplus/

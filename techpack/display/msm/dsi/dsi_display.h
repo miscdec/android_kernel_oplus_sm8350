@@ -19,6 +19,9 @@
 #include "dsi_ctrl.h"
 #include "dsi_phy.h"
 #include "dsi_panel.h"
+#ifdef OPLUS_BUG_STABILITY
+#include "oplus_dsi_support.h"
+#endif /*OPLUS_BUG_STABILITY*/
 
 #define MAX_DSI_CTRLS_PER_DISPLAY             2
 #define DSI_CLIENT_NAME_SIZE		20
@@ -283,6 +286,11 @@ struct dsi_display {
 
 	u32 te_source;
 	u32 clk_gating_config;
+#if defined(OPLUS_FEATURE_PXLW_IRIS5)
+	u32 off;
+	u32 cnt;
+	u8 cmd_data_type;
+#endif
 	bool queue_cmd_waits;
 	struct workqueue_struct *dma_cmd_workq;
 
@@ -297,6 +305,16 @@ struct dsi_display {
 	struct dsi_panel_cmd_set cmd_set;
 
 	bool enabled;
+
+#ifdef OPLUS_BUG_STABILITY
+	/* save qsync info, then restore qsync status after panel enable*/
+	bool need_qsync_restore;
+	/* force close qysnc window when qsync mode is on before panel enable */
+	bool force_qsync_mode_off;
+	uint32_t current_qsync_mode;
+	uint32_t current_qsync_dynamic_min_fps;
+	struct completion switch_te_gate;
+#endif
 };
 
 int dsi_display_dev_probe(struct platform_device *pdev);
@@ -317,7 +335,7 @@ int dsi_display_get_num_of_displays(void);
  * @Returns: Number of display entries filled
  */
 int dsi_display_get_active_displays(void **display_array,
-		u32 max_display_count);
+				    u32 max_display_count);
 
 /**
  * dsi_display_get_display_by_name()- finds display by name
@@ -343,7 +361,7 @@ void dsi_display_set_active_state(struct dsi_display *display, bool is_active);
  * Return: error code.
  */
 int dsi_display_drm_bridge_init(struct dsi_display *display,
-		struct drm_encoder *enc);
+				struct drm_encoder *enc);
 
 /**
  * dsi_display_drm_bridge_deinit() - destroys DRM bridge for the display
@@ -364,7 +382,7 @@ int dsi_display_drm_bridge_deinit(struct dsi_display *display);
  * Return: error code.
  */
 int dsi_display_drm_ext_bridge_init(struct dsi_display *display,
-		struct drm_encoder *enc, struct drm_connector *connector);
+				    struct drm_encoder *enc, struct drm_connector *connector);
 
 /**
  * dsi_display_get_info() - returns the display properties
@@ -375,7 +393,7 @@ int dsi_display_drm_ext_bridge_init(struct dsi_display *display,
  * Return: error code.
  */
 int dsi_display_get_info(struct drm_connector *connector,
-		struct msm_display_info *info, void *disp);
+			 struct msm_display_info *info, void *disp);
 
 /**
  * dsi_display_get_mode_count() - get number of modes supported by the display
@@ -405,7 +423,7 @@ int dsi_display_get_modes(struct dsi_display *display,
  * Return: error code.
  */
 void dsi_display_put_mode(struct dsi_display *display,
-	struct dsi_display_mode *mode);
+			  struct dsi_display_mode *mode);
 
 /**
  * dsi_display_get_default_lms() - retrieve max number of lms used
@@ -433,7 +451,8 @@ int dsi_display_get_qsync_min_fps(void *dsi_display, u32 mode_fps);
  *
  * Return: LM count from dsi panel topology
  */
-int dsi_conn_get_lm_from_mode(void *dsi_display, const struct drm_display_mode *mode);
+int dsi_conn_get_lm_from_mode(void *dsi_display,
+			      const struct drm_display_mode *mode);
 
 /**
  * dsi_display_find_mode() - retrieve cached DSI mode given relevant params
@@ -444,8 +463,8 @@ int dsi_conn_get_lm_from_mode(void *dsi_display, const struct drm_display_mode *
  * Return: error code.
  */
 int dsi_display_find_mode(struct dsi_display *display,
-		const struct dsi_display_mode *cmp,
-		struct dsi_display_mode **out_mode);
+			  const struct dsi_display_mode *cmp,
+			  struct dsi_display_mode **out_mode);
 /**
  * dsi_display_validate_mode() - validates if mode is supported by display
  * @display:             Handle to display.
@@ -467,8 +486,8 @@ int dsi_display_validate_mode(struct dsi_display *display,
  * Return: 0 if  error code.
  */
 int dsi_display_validate_mode_change(struct dsi_display *display,
-			struct dsi_display_mode *cur_dsi_mode,
-			struct dsi_display_mode *mode);
+				     struct dsi_display_mode *cur_dsi_mode,
+				     struct dsi_display_mode *mode);
 
 /**
  * dsi_display_set_mode() - Set mode on the display.
@@ -565,8 +584,8 @@ int dsi_display_disable(struct dsi_display *display);
  * @return: error code.
  */
 int dsi_pre_clkoff_cb(void *priv, enum dsi_clk_type clk_type,
-		enum dsi_lclk_type l_type,
-		enum dsi_clk_state new_state);
+		      enum dsi_lclk_type l_type,
+		      enum dsi_clk_state new_state);
 
 /**
  * dsi_display_update_pps() - update PPS buffer.
@@ -589,8 +608,8 @@ int dsi_display_update_pps(char *pps_cmd, void *display);
  * @return: error code.
  */
 int dsi_post_clkoff_cb(void *priv, enum dsi_clk_type clk_type,
-		enum dsi_lclk_type l_type,
-		enum dsi_clk_state curr_state);
+		       enum dsi_lclk_type l_type,
+		       enum dsi_clk_state curr_state);
 
 /**
  * dsi_post_clkon_cb() - Callback after clock is turned on
@@ -602,8 +621,8 @@ int dsi_post_clkoff_cb(void *priv, enum dsi_clk_type clk_type,
  * @return: error code.
  */
 int dsi_post_clkon_cb(void *priv, enum dsi_clk_type clk_type,
-		enum dsi_lclk_type l_type,
-		enum dsi_clk_state curr_state);
+		      enum dsi_lclk_type l_type,
+		      enum dsi_clk_state curr_state);
 
 /**
  * dsi_pre_clkon_cb() - Callback before clock is turned on
@@ -615,8 +634,8 @@ int dsi_post_clkon_cb(void *priv, enum dsi_clk_type clk_type,
  * @return: error code.
  */
 int dsi_pre_clkon_cb(void *priv, enum dsi_clk_type clk_type,
-		enum dsi_lclk_type l_type,
-		enum dsi_clk_state new_state);
+		     enum dsi_lclk_type l_type,
+		     enum dsi_clk_state new_state);
 
 /**
  * dsi_display_unprepare() - power off display hardware.
@@ -652,9 +671,9 @@ struct drm_panel *dsi_display_get_drm_panel(struct dsi_display *display);
  * @enable:             Whether to enable/disable the event interrupt.
  */
 void dsi_display_enable_event(struct drm_connector *connector,
-		struct dsi_display *display,
-		uint32_t event_idx, struct dsi_event_cb_info *event_info,
-		bool enable);
+			      struct dsi_display *display,
+			      uint32_t event_idx, struct dsi_event_cb_info *event_info,
+			      bool enable);
 
 /**
  * dsi_display_set_backlight() - set backlight
@@ -665,7 +684,7 @@ void dsi_display_enable_event(struct drm_connector *connector,
  * @enable:             Whether to enable/disable the event interrupt.
  */
 int dsi_display_set_backlight(struct drm_connector *connector,
-		void *display, u32 bl_lvl);
+			      void *display, u32 bl_lvl);
 
 /**
  * dsi_display_check_status() - check if panel is dead or alive
@@ -674,7 +693,7 @@ int dsi_display_set_backlight(struct drm_connector *connector,
  * @te_check_override:	Whether check for TE from panel or default check
  */
 int dsi_display_check_status(struct drm_connector *connector, void *display,
-				bool te_check_override);
+			     bool te_check_override);
 
 /**
  * dsi_display_cmd_transfer() - transfer command to the panel
@@ -684,8 +703,8 @@ int dsi_display_check_status(struct drm_connector *connector, void *display,
  * @cmd_buf_len:        Command buffer length in bytes
  */
 int dsi_display_cmd_transfer(struct drm_connector *connector,
-		void *display, const char *cmd_buffer,
-		u32 cmd_buf_len);
+			     void *display, const char *cmd_buffer,
+			     u32 cmd_buf_len);
 
 /**
  * dsi_display_cmd_receive() - receive response from the panel
@@ -727,7 +746,7 @@ int dsi_display_soft_reset(void *display);
  * Returns: Zero on success
  */
 int dsi_display_set_power(struct drm_connector *connector,
-		int power_mode, void *display);
+			  int power_mode, void *display);
 
 /*
  * dsi_display_pre_kickoff - program kickoff-time features
@@ -737,8 +756,8 @@ int dsi_display_set_power(struct drm_connector *connector,
  * Returns: Zero on success
  */
 int dsi_display_pre_kickoff(struct drm_connector *connector,
-		struct dsi_display *display,
-		struct msm_display_kickoff_params *params);
+			    struct dsi_display *display,
+			    struct msm_display_kickoff_params *params);
 
 /*
  * dsi_display_pre_commit - program pre commit features
@@ -747,7 +766,7 @@ int dsi_display_pre_kickoff(struct drm_connector *connector,
  * Returns: Zero on success
  */
 int dsi_display_pre_commit(void *display,
-		struct msm_display_conn_params *params);
+			   struct msm_display_conn_params *params);
 
 /**
  * dsi_display_get_dst_format() - get dst_format from DSI display
@@ -757,8 +776,8 @@ int dsi_display_pre_commit(void *display,
  * Return: enum dsi_pixel_format type
  */
 enum dsi_pixel_format dsi_display_get_dst_format(
-		struct drm_connector *connector,
-		void *display);
+	struct drm_connector *connector,
+	void *display);
 
 /**
  * dsi_display_cont_splash_config() - initialize splash resources
@@ -767,6 +786,15 @@ enum dsi_pixel_format dsi_display_get_dst_format(
  * Return: Zero on Success
  */
 int dsi_display_cont_splash_config(void *display);
+
+#ifdef OPLUS_BUG_STABILITY
+struct dsi_display *get_main_display(void);
+
+/* Add for implement panel register read */
+int dsi_host_alloc_cmd_tx_buffer(struct dsi_display *display);
+int dsi_display_cmd_engine_enable(struct dsi_display *display);
+int dsi_display_cmd_engine_disable(struct dsi_display *display);
+#endif
 
 /**
  * dsi_display_cont_splash_res_disable() - Disable resource votes added in probe
@@ -783,7 +811,7 @@ int dsi_display_cont_splash_res_disable(void *display);
  * Returns: v_front_porch on success error code on failure
  */
 int dsi_display_get_panel_vfp(void *display,
-	int h_active, int v_active);
+			      int h_active, int v_active);
 
 /**
  * dsi_display_dump_clks_state() - dump clocks state to console
