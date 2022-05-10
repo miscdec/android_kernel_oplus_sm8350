@@ -20,6 +20,12 @@
 #include "debug.h"
 #include "genl.h"
 
+#ifdef OPLUS_BUG_STABILITY
+//WuGuotian@CONNECTIVITY.WIFI.HARDWARE.FTM.1776184, 2021/02/08,Add for boot wlan mode not use NV mac
+#include <soc/oppo/boot_mode.h>
+#include <soc/oplus/system/oplus_project.h>
+#endif /* OPLUS_BUG_STABILITY */
+
 #define CNSS_DUMP_FORMAT_VER		0x11
 #define CNSS_DUMP_FORMAT_VER_V2		0x22
 #define CNSS_DUMP_MAGIC_VER_V2		0x42445953
@@ -559,6 +565,7 @@ static int cnss_setup_dms_mac(struct cnss_plat_data *plat_priv)
 			return -EINVAL;
 		}
 	}
+
 qmi_send:
 	if (plat_priv->dms.mac_valid)
 		ret =
@@ -1632,6 +1639,37 @@ static int cnss_cold_boot_cal_done_hdlr(struct cnss_plat_data *plat_priv,
 	switch (cal_info->cal_status) {
 	case CNSS_CAL_DONE:
 		cnss_pr_dbg("Calibration completed successfully\n");
+
+		#ifdef OPLUS_BUG_STABILITY
+		//WuGuotian@CONNECTIVITY.WIFI.HARDWARE.FTM.1776184, 2021/02/08,Add for boot wlan mode not use NV mac
+		if(get_Modem_Version() == 8){
+			cnss_pr_dbg("get_Modem_Version = %d\n", get_Modem_Version());
+			cnss_l7e_vreg_off(plat_priv, &plat_priv->vreg_list);   //pull low LDO7e
+			msleep(10);
+
+			//1st time
+			cnss_bus_pa_en_rw(plat_priv,1);        //2.4G PA_EN chain0/1 output high
+			msleep(1);
+			cnss_bus_pa_en_rw(plat_priv,0);        //2.4G PA_EN chain0/1 output low
+			msleep(1);
+
+			//2nd time
+			cnss_bus_pa_en_rw(plat_priv,1);        //2.4G PA_EN chain0/1 output high
+			msleep(1);
+			cnss_bus_pa_en_rw(plat_priv,0);        //2.4G PA_EN chain0/1 output low
+			msleep(1);
+
+			//3rd time
+			cnss_bus_pa_en_rw(plat_priv,1);        //2.4G PA_EN chain0/1 output high
+			msleep(1);
+			cnss_bus_pa_en_rw(plat_priv,0);        //2.4G PA_EN chain0/1 output low
+			msleep(1);
+
+			msleep(10);
+			cnss_l7e_vreg_on(plat_priv, &plat_priv->vreg_list);  //pull high LDO7e
+		}
+		#endif /* OPLUS_BUG_STABILITY */
+
 		plat_priv->cal_done = true;
 		break;
 	case CNSS_CAL_TIMEOUT:

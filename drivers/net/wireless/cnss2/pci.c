@@ -5952,6 +5952,50 @@ static void cnss_pci_remove(struct pci_dev *pci_dev)
 	}
 }
 
+#ifdef OPLUS_BUG_STABILITY
+//WuGuotian@CONNECTIVITY.WIFI.HARDWARE.FTM.1776184, 2021/02/08,Add for boot wlan mode not use NV mac
+int cnss_pci_pa_en_rw(struct cnss_pci_data *pci_priv)
+{
+	u32 val;
+
+	cnss_pci_reg_read(pci_priv, 0x005D4258, &val);
+	cnss_pr_err("cnss_pci_pa_en_rw, bf: reg 0x005D4258, val: %x\n", val);
+	cnss_pci_reg_write(pci_priv, 0x005D4258, 0x11111111);
+	cnss_pci_reg_read(pci_priv, 0x005D4258, &val);
+	cnss_pr_err("cnss_pci_pa_en_rw, af: reg 0x005D4258, val: %x\n", val);
+
+	cnss_pci_reg_read(pci_priv, 0x005D4260, &val);
+	cnss_pr_err("cnss_pci_pa_en_rw, bf: reg 0x005D4260, val: %x\n", val);
+
+	cnss_pci_reg_write(pci_priv, 0x005D4260, 0x11111111);
+	cnss_pci_reg_read(pci_priv, 0x005D4260, &val);
+	cnss_pr_err("cnss_pci_pa_en_rw, af: reg 0x005D4260, val: %x\n", val);
+
+	return 0;
+}
+
+
+int cnss_pci_pa_dis_rw(struct cnss_pci_data *pci_priv)
+{
+	u32 val;
+
+	cnss_pci_reg_read(pci_priv, 0x005D4258, &val);
+	cnss_pr_err("cnss_pci_pa_en_rw, bf: reg 0x005D4258, val: %x\n", val);
+	cnss_pci_reg_write(pci_priv, 0x005D4258, 0x11111110);
+	cnss_pci_reg_read(pci_priv, 0x005D4258, &val);
+	cnss_pr_err("cnss_pci_pa_en_rw, af: reg 0x005D4258, val: %x\n", val);
+
+	cnss_pci_reg_read(pci_priv, 0x005D4260, &val);
+	cnss_pr_err("cnss_pci_pa_en_rw, bf: reg 0x005D4260, val: %x\n", val);
+
+	cnss_pci_reg_write(pci_priv, 0x005D4260, 0x11111110);
+	cnss_pci_reg_read(pci_priv, 0x005D4260, &val);
+	cnss_pr_err("cnss_pci_pa_en_rw, af: reg 0x005D4260, val: %x\n", val);
+
+	return 0;
+}
+#endif /* OPLUS_BUG_STABILITY */
+
 static const struct pci_device_id cnss_pci_id_table[] = {
 	{ QCA6174_VENDOR_ID, QCA6174_DEVICE_ID, PCI_ANY_ID, PCI_ANY_ID },
 	{ QCA6290_VENDOR_ID, QCA6290_DEVICE_ID, PCI_ANY_ID, PCI_ANY_ID },
