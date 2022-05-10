@@ -34,7 +34,7 @@
 
 #define MAXIMUM_LINKS_PER_SESSION  4
 
-#define MAXIMUM_RETRY_ATTEMPTS 2
+#define MAXIMUM_RETRY_ATTEMPTS 5
 
 #define MINIMUM_WORKQUEUE_SCHED_TIME_IN_MS 5
 
@@ -379,7 +379,6 @@ struct cam_req_mgr_connected_device {
  * @dual_trigger         : Links needs to wait for two triggers prior to
  *                         applying the settings
  * @trigger_cnt          : trigger count value per device initiating the trigger
- * @eof_event_cnt        : Atomic variable to track the number of EOF requests
  * @skip_init_frame      : skip initial frames crm_wd_timer validation in the
  *                         case of long exposure use case
  * @last_sof_trigger_jiffies : Record the jiffies of last sof trigger jiffies
@@ -415,7 +414,8 @@ struct cam_req_mgr_core_link {
 	uint64_t                             sof_timestamp;
 	uint64_t                             prev_sof_timestamp;
 	bool                                 dual_trigger;
-	uint32_t trigger_cnt[CAM_REQ_MGR_MAX_TRIGGERS][CAM_TRIGGER_MAX_POINTS];
+	uint32_t trigger_cnt[CAM_REQ_MGR_MAX_TRIGGERS]
+				[CAM_TRIGGER_MAX_POINTS + 1];
 	atomic_t                             eof_event_cnt;
 	bool                                 skip_init_frame;
 	uint64_t                             last_sof_trigger_jiffies;
