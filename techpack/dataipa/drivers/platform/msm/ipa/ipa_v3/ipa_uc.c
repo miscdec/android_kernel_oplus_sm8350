@@ -1659,6 +1659,10 @@ int ipa3_uc_bw_monitor(struct ipa_wdi_bw_info *info)
 
 	if (!info)
 		return -EINVAL;
+	if (!ipa3_ctx->uc_ctx.uc_event_ring_valid) {
+		IPADBG("uC event ring not initialized\n");
+		return res;
+	}
 
 	if (!ipa3_ctx->uc_ctx.uc_event_ring_valid) {
 		IPADBG("uC event ring not initialized\n");
