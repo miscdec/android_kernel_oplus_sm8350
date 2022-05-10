@@ -135,9 +135,17 @@ do {                                                    \
 				  SND_JACK_BTN_2 | SND_JACK_BTN_3 | \
 				  SND_JACK_BTN_4 | SND_JACK_BTN_5)
 #define OCP_ATTEMPT 20
+#ifndef OPLUS_ARCH_EXTENDS
 #define HS_DETECT_PLUG_TIME_MS (3 * 1000)
+#else /* OPLUS_ARCH_EXTENDS */
+#define HS_DETECT_PLUG_TIME_MS (5 * 1000)
+#endif /* OPLUS_ARCH_EXTENDS */
 #define SPECIAL_HS_DETECT_TIME_MS (2 * 1000)
+#ifndef OPLUS_ARCH_EXTENDS
 #define MBHC_BUTTON_PRESS_THRESHOLD_MIN 250
+#else /* OPLUS_ARCH_EXTENDS */
+#define MBHC_BUTTON_PRESS_THRESHOLD_MIN 1000
+#endif /* OPLUS_ARCH_EXTENDS */
 #define GND_MIC_SWAP_THRESHOLD 4
 #define GND_MIC_USBC_SWAP_THRESHOLD 2
 #define WCD_FAKE_REMOVAL_MIN_PERIOD_MS 100
@@ -459,34 +467,34 @@ struct wcd_mbhc_register {
 
 struct wcd_mbhc_cb {
 	void (*update_cross_conn_thr)
-		(struct wcd_mbhc *mbhc);
+	(struct wcd_mbhc *mbhc);
 	void (*mbhc_surge_ctl)
-		(struct wcd_mbhc *mbhc, bool surge_en);
+	(struct wcd_mbhc *mbhc, bool surge_en);
 	void (*mbhc_comp_autozero_control)
-		(struct wcd_mbhc *mbhc, bool az_enable);
+	(struct wcd_mbhc *mbhc, bool az_enable);
 	void (*get_micbias_val)
-		(struct wcd_mbhc *mbhc, int *mb);
+	(struct wcd_mbhc *mbhc, int *mb);
 	void (*bcs_enable)
-		(struct wcd_mbhc *mbhc, bool bcs_enable);
+	(struct wcd_mbhc *mbhc, bool bcs_enable);
 	int (*enable_mb_source)(struct wcd_mbhc *mbhc, bool turn_on);
 	void (*trim_btn_reg)(struct snd_soc_component *component);
 	void (*compute_impedance)(struct wcd_mbhc *mbhc,
-			uint32_t *zl, uint32_t *zr);
+				  uint32_t *zl, uint32_t *zr);
 	void (*set_micbias_value)(struct snd_soc_component *component);
 	void (*set_auto_zeroing)(struct snd_soc_component *component,
-			bool enable);
-	struct firmware_cal * (*get_hwdep_fw_cal)(struct wcd_mbhc *mbhc,
+				 bool enable);
+	struct firmware_cal *(*get_hwdep_fw_cal)(struct wcd_mbhc *mbhc,
 			enum wcd_cal_type);
 	void (*set_cap_mode)(struct snd_soc_component *component,
-			bool micbias1, bool micbias2);
+			     bool micbias1, bool micbias2);
 	int (*register_notifier)(struct wcd_mbhc *mbhc,
 				 struct notifier_block *nblock,
 				 bool enable);
 	int (*request_irq)(struct snd_soc_component *component,
-			int irq, irq_handler_t handler,
-			const char *name, void *data);
+			   int irq, irq_handler_t handler,
+			   const char *name, void *data);
 	void (*irq_control)(struct snd_soc_component *component,
-			int irq, bool enable);
+			    int irq, bool enable);
 	int (*free_irq)(struct snd_soc_component *component,
 			int irq, void *data);
 	void (*clk_setup)(struct snd_soc_component *component, bool enable);
@@ -497,7 +505,7 @@ struct wcd_mbhc_cb {
 	void (*mbhc_common_micb_ctrl)(struct snd_soc_component *component,
 				      int event, bool enable);
 	void (*micb_internal)(struct snd_soc_component *component,
-			int micb_num, bool enable);
+			      int micb_num, bool enable);
 	bool (*hph_pa_on_status)(struct snd_soc_component *component);
 	void (*set_btn_thr)(struct snd_soc_component *component,
 			    s16 *btn_low, s16 *btn_high,
@@ -505,24 +513,24 @@ struct wcd_mbhc_cb {
 	void (*hph_pull_up_control)(struct snd_soc_component *component,
 				    enum mbhc_hs_pullup_iref);
 	int (*mbhc_micbias_control)(struct snd_soc_component *component,
-			int micb_num, int req);
+				    int micb_num, int req);
 	void (*mbhc_micb_ramp_control)(struct snd_soc_component *component,
-			bool enable);
+				       bool enable);
 	void (*skip_imped_detect)(struct snd_soc_component *component);
 	bool (*extn_use_mb)(struct snd_soc_component *component);
 	int (*mbhc_micb_ctrl_thr_mic)(struct snd_soc_component *component,
-			int micb_num, bool req_en);
+				      int micb_num, bool req_en);
 	void (*mbhc_gnd_det_ctrl)(struct snd_soc_component *component,
-			bool enable);
+				  bool enable);
 	void (*hph_pull_down_ctrl)(struct snd_soc_component *component,
-			bool enable);
+				   bool enable);
 	void (*mbhc_moisture_config)(struct wcd_mbhc *mbhc);
 	bool (*hph_register_recovery)(struct wcd_mbhc *mbhc);
 	void (*update_anc_state)(struct snd_soc_component *component,
-			bool enable, int anc_num);
+				 bool enable, int anc_num);
 	bool (*is_anc_on)(struct wcd_mbhc *mbhc);
 	void (*hph_pull_up_control_v2)(struct snd_soc_component *component,
-			int pull_up_cur);
+				       int pull_up_cur);
 	bool (*mbhc_get_moisture_status)(struct wcd_mbhc *mbhc);
 	void (*mbhc_moisture_polling_ctrl)(struct wcd_mbhc *mbhc, bool enable);
 	void (*mbhc_moisture_detect_en)(struct wcd_mbhc *mbhc, bool enable);
@@ -551,6 +559,9 @@ struct wcd_mbhc {
 	wait_queue_head_t wait_btn_press;
 	bool is_btn_press;
 	u8 current_plug;
+#ifdef OPLUS_ARCH_EXTENDS
+	u8 plug_before_ssr;
+#endif /* OPLUS_ARCH_EXTENDS */
 	bool in_swch_irq_handler;
 	bool hphl_swh; /*track HPHL switch NC / NO */
 	bool gnd_swh; /*track GND switch NC / NO */
@@ -619,6 +630,23 @@ struct wcd_mbhc {
 	bool force_linein;
 	struct device_node *fsa_np;
 	struct notifier_block fsa_nb;
+
+#ifdef OPLUS_ARCH_EXTENDS
+	bool need_cross_conn;
+#endif /* OPLUS_ARCH_EXTENDS */
+
+#ifdef OPLUS_ARCH_EXTENDS
+	struct delayed_work hp_detect_work;
+#endif /* OPLUS_ARCH_EXTENDS */
+
+#ifdef OPLUS_ARCH_EXTENDS
+	bool irq_trigger_enable;
+	struct delayed_work mech_irq_trigger_dwork;
+#endif /* OPLUS_ARCH_EXTENDS */
+
+#ifdef OPLUS_ARCH_EXTENDS
+	bool headset_micbias_alwayon;
+#endif /* OPLUS_ARCH_EXTENDS */
 };
 
 void wcd_mbhc_find_plug_and_report(struct wcd_mbhc *mbhc,
@@ -633,6 +661,6 @@ void wcd_mbhc_jack_report(struct wcd_mbhc *mbhc,
 int wcd_cancel_btn_work(struct wcd_mbhc *mbhc);
 int wcd_mbhc_get_button_mask(struct wcd_mbhc *mbhc);
 void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
-			enum snd_jack_types jack_type);
+			  enum snd_jack_types jack_type);
 
 #endif /* __WCD_MBHC_V2_H__ */

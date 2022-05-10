@@ -1666,6 +1666,10 @@ static int wcd937x_event_notify(struct notifier_block *block,
 	case BOLERO_SLV_EVT_SSR_DOWN:
 		wcd937x->mbhc->wcd_mbhc.deinit_in_progress = true;
 		mbhc = &wcd937x->mbhc->wcd_mbhc;
+		#ifdef OPLUS_ARCH_EXTENDS
+		mbhc->plug_before_ssr = mbhc->current_plug;
+		pr_info("%s: mbhc->plug_before_ssr=%d\n", __func__, mbhc->plug_before_ssr);
+		#endif /* OPLUS_ARCH_EXTENDS */
 		wcd937x->usbc_hs_status = get_usbc_hs_status(component,
 						mbhc->mbhc_cfg);
 		wcd937x_mbhc_ssr_down(wcd937x->mbhc, component);
@@ -3217,13 +3221,22 @@ static int wcd937x_bind(struct device *dev)
 	 * soundwire auto enumeration of slave devices as
 	 * as per HW requirement.
 	 */
+#ifdef OPLUS_BUG_STABILITY
+	dev_info(dev, "%s: delay bind wcd\n", __func__);
+	usleep_range(10000, 10010);
+#else /* OPLUS_BUG_STABILITY */
 	usleep_range(5000, 5010);
+#endif /* OPLUS_BUG_STABILITY */
 	wcd937x->wakeup = wcd937x_wakeup;
 
 	ret = component_bind_all(dev, wcd937x);
 	if (ret) {
 		dev_err(dev, "%s: Slave bind failed, ret = %d\n",
 			__func__, ret);
+#ifdef OPLUS_BUG_STABILITY
+		dev_err(dev, "%s: trigger panic\n", __func__);
+		panic("%s: panic for 1068440", __func__);
+#endif /* OPLUS_BUG_STABILITY */
 		goto err_bind_all;
 	}
 
