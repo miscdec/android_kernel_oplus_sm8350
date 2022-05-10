@@ -28,6 +28,9 @@
 #include "kgsl_sync.h"
 #include "kgsl_sysfs.h"
 #include "kgsl_trace.h"
+#if defined(OPLUS_FEATURE_VIRTUAL_RESERVE_MEMORY) && defined(CONFIG_VIRTUAL_RESERVE_MEMORY)
+#include <linux/reserve_area.h>
+#endif
 
 #ifndef arch_mmap_check
 #define arch_mmap_check(addr, len, flags)	(0)
@@ -4108,6 +4111,9 @@ kgsl_get_unmapped_area(struct file *file, unsigned long addr,
 					       pid_nr(private->pid), addr, pgoff, len,
 					       (int) val);
 	}
+#if defined(OPLUS_FEATURE_VIRTUAL_RESERVE_MEMORY) && defined(CONFIG_VIRTUAL_RESERVE_MEMORY)
+	update_oom_pid_and_time(len, val, flags);
+#endif
 
 	kgsl_mem_entry_put(entry);
 	return val;
