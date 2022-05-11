@@ -1,8 +1,23 @@
-// SPDX-License-Identifier: GPL-2.0-only
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
-
+/************************************************************************************
+** File: - fingerprints_hal\drivers\goodix_fp\gf_spi_tee.c
+** OPLUS_FEATURE_FINGERPRINT
+** Copyright (C), 2008-2016, OPLUS Mobile Comm Corp., Ltd
+**
+** Description:
+**      fpc fingerprint kernel device driver
+**
+** Version: 1.0
+** Date created: 15:03:11,12/08/2017
+** Author:ChenRan@BSP.Fingerprint.Basic
+** TAG: BSP.Fingerprint.Basic
+**
+** --------------------------- Revision History: --------------------------------
+**    <author>     <data>        <desc>
+**    Ran.Chen     2017/08/11    create the file for goodix 3268
+**    Ran.Chen     2017/09/08    add gf_cmd_wakelock
+**    Hongdao.yu  2018/03/09    modify irq/reset/power time sequence 
+**    Dongnan.Wu  2019/02/23    modify for 18073 goodix device
+************************************************************************************/
 #define pr_fmt(fmt)		KBUILD_MODNAME ": " fmt
 
 #include <linux/init.h>
@@ -31,13 +46,18 @@
 #include <linux/fb.h>
 #include <linux/pm_qos.h>
 #include <linux/cpufreq.h>
+//#include <linux/wakelock.h>
 #include "../include/wakelock.h"
 #include <linux/time.h>
 #include <linux/types.h>
 #include <net/sock.h>
 #include <net/netlink.h>
+#include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_irq.h>
+//#include <mtk_spi_hal.h>
+//#include <mt-plat/mtk_gpio.h>
+//#include <linux/irqchip/mtk-eic.h>
 #include <linux/of_address.h>
 #include <linux/of_device.h>
 #include "gf_spi_tee.h"
@@ -50,6 +70,7 @@
 #endif
 #include <linux/version.h>
 
+/* Uncomment if DeviceTree should be used */
 
 #define DEBUG
 #define NETLINK_TEST 25
@@ -61,30 +82,32 @@
 #define VER_MINOR   2
 #define PATCH_LEVEL 4
 
-#define WAKELOCK_HOLD_TIME 500
-#define SENDCMD_WAKELOCK_HOLD_TIME 1000
+#define WAKELOCK_HOLD_TIME 500 /* in ms */
+#define SENDCMD_WAKELOCK_HOLD_TIME 1000 /* in ms */
 
 #define GF_SPIDEV_NAME     "goodix,goodix_fp"
 #define OPLUS_SPIDEV_NAME   "oplus,oplus_fp"
+/*device name after register in charater*/
 #define GF_DEV_NAME            "goodix_fp"
-#define	GF_INPUT_NAME	    "qwerty"
+#define	GF_INPUT_NAME	    "qwerty"	/*"goodix_fp" */
 
 #define	CHRD_DRIVER_NAME	"goodix_fp_spi"
 #define	CLASS_NAME		    "goodix_fp"
 
-#define N_SPI_MINORS		32
+#define N_SPI_MINORS		32	/* ... up to 256 */
 
 static struct fp_underscreen_info fp_tpinfo;
 static unsigned int lasttouchmode = 0;
 
-static int gf_spidev_major;
+static int SPIDEV_MAJOR;
 
+//struct mt_spi_t *fpc_ms;
 
 #if !defined(CONFIG_MTK_CLKMGR)
 extern struct clk *globle_spi_clk;
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 14, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 0)
 struct mtk_spi {
 	void __iomem                                        *base;
 	void __iomem                                        *peri_regs;
@@ -98,20 +121,6 @@ struct mtk_spi {
 	u32                                                 tx_sgl_len, rx_sgl_len;
 	const struct mtk_spi_compatible                     *dev_comp;
 	u32                                                 dram_8gb_offset;
-};
-#elif (LINUX_VERSION_CODE == KERNEL_VERSION(4, 14, 0))
-struct mtk_spi {
-	void __iomem *base;
-	u32 state;
-	int pad_num;
-	u32 *pad_sel;
-	struct clk *parent_clk, *sel_clk, *spi_clk;
-	struct spi_transfer *cur_transfer;
-	u32 xfer_len;
-	u32 num_xfered;
-	struct scatterlist *tx_sgl, *rx_sgl;
-	u32 tx_sgl_len, rx_sgl_len;
-	const struct mtk_spi_compatible *dev_comp;
 };
 #else
 struct mtk_spi {
@@ -154,35 +163,35 @@ struct gf_key_map maps[] = {
 #endif
 };
 
-static int gf_opticalfp_irq_handler(struct fp_underscreen_info *tp_info);
-
-static void gf_spi_clk_enable(struct gf_dev *gf_dev)
-{
-	#if !defined(CONFIG_MTK_CLKMGR)
-	struct spi_device *spi = gf_dev->spi;
-	struct mtk_spi *gf_ms = spi_master_get_devdata(spi->master);
-	clk_prepare_enable(gf_ms->spi_clk);
+ static void gf_spi_clk_enable(struct gf_dev *gf_dev)
+ {
+    #if !defined(CONFIG_MTK_CLKMGR)
+    struct spi_device *spi = gf_dev->spi;
+    struct mtk_spi *gf_ms = spi_master_get_devdata(spi->master);
+    clk_prepare_enable(gf_ms->spi_clk);
 	pr_info("clk_prepare_enable gf_spi_clk_enable.\n");
-	#else
-	enable_clock(MT_CG_PERI_SPI0, "spi");
+   
+    #else
+    enable_clock(MT_CG_PERI_SPI0, "spi");
 	pr_debug("enable_clock gf_spi_clk_enable.\n");
-	#endif
-	return;
-}
+    #endif
+    return;
+ }
 
-static void gf_spi_clk_disable(struct gf_dev *gf_dev)
-{
-	#if !defined(CONFIG_MTK_CLKMGR)
-	struct spi_device *spi = gf_dev->spi;
-	struct mtk_spi *gf_ms = spi_master_get_devdata(spi->master);
+ static void gf_spi_clk_disable(struct gf_dev *gf_dev)
+ {
+   #if !defined(CONFIG_MTK_CLKMGR)
+    struct spi_device *spi = gf_dev->spi;
+    struct mtk_spi *gf_ms = spi_master_get_devdata(spi->master);
 
-	clk_disable_unprepare(gf_ms->spi_clk);
-	printk("%s, clk_disable_unprepare\n", __func__);
-	#else
-	disable_clock(MT_CG_PERI_SPI0, "spi");
-	#endif
-	return;
-}
+    clk_disable_unprepare(gf_ms->spi_clk);
+    printk("%s, clk_disable_unprepare\n", __func__);
+    #else
+    disable_clock(MT_CG_PERI_SPI0, "spi");
+    //printk("%s, disable_clock\n", __func__);
+    #endif
+    return;
+ }
 
 static void gf_enable_irq(struct gf_dev *gf_dev)
 {
@@ -196,12 +205,12 @@ static void gf_enable_irq(struct gf_dev *gf_dev)
 
 static void gf_disable_irq(struct gf_dev *gf_dev)
 {
-	if (gf_dev->irq_enabled) {
-		gf_dev->irq_enabled = 0;
-		disable_irq(gf_dev->irq);
-	} else {
-		pr_warn("IRQ has been disabled.\n");
-	}
+        if (gf_dev->irq_enabled) {
+                gf_dev->irq_enabled = 0;
+                disable_irq(gf_dev->irq);
+        } else {
+                pr_warn("IRQ has been disabled.\n");
+        }
 }
 
 #ifdef AP_CONTROL_CLK
@@ -216,6 +225,7 @@ static long spi_clk_max_rate(struct clk *clk, unsigned long rate)
 	if (cur == rate)
 		return rate;
 
+	/* if we got here then: cur > rate */
 	lowest_available = clk_round_rate(clk, 0);
 	if (lowest_available > rate)
 		return -EINVAL;
@@ -229,7 +239,10 @@ static long spi_clk_max_rate(struct clk *clk, unsigned long rate)
 
 		if ((cur < rate) && (cur > nearest_low))
 			nearest_low = cur;
-
+		/*
+		 * if we stepped too far, then start stepping in the other
+		 * direction with half the step size
+		 */
 		if (((cur > rate) && (step_direction > 0))
 				|| ((cur < rate) && (step_direction < 0))) {
 			step_direction = -step_direction;
@@ -419,28 +432,28 @@ static irqreturn_t gf_irq(int irq, void *handle)
 
 static int irq_setup(struct gf_dev *gf_dev)
 {
-	int status;
+        int status;
 
-	gf_dev->irq = gf_irq_num(gf_dev);
-	status = request_threaded_irq(gf_dev->irq, NULL, gf_irq,
-			IRQF_TRIGGER_RISING | IRQF_ONESHOT, "gf", gf_dev);
+    gf_dev->irq = gf_irq_num(gf_dev);
+    status = request_threaded_irq(gf_dev->irq, NULL, gf_irq,
+            IRQF_TRIGGER_RISING | IRQF_ONESHOT, "gf", gf_dev);
 
-		if (status) {
-				pr_err("failed to request IRQ:%d\n", gf_dev->irq);
-				return status;
-		}
-		enable_irq_wake(gf_dev->irq);
-		gf_dev->irq_enabled = 1;
+        if (status) {
+                pr_err("failed to request IRQ:%d\n", gf_dev->irq);
+                return status;
+        }
+        enable_irq_wake(gf_dev->irq);
+        gf_dev->irq_enabled = 1;
 
-		return status;
+        return status;
 }
 
 static void irq_cleanup(struct gf_dev *gf_dev)
 {
-	gf_dev->irq_enabled = 0;
-	disable_irq(gf_dev->irq);
-	disable_irq_wake(gf_dev->irq);
-	free_irq(gf_dev->irq, gf_dev);
+    gf_dev->irq_enabled = 0;
+    disable_irq(gf_dev->irq);
+    disable_irq_wake(gf_dev->irq);
+    free_irq(gf_dev->irq, gf_dev);
 }
 
 static void gf_kernel_key_input(struct gf_dev *gf_dev, struct gf_key *gf_key)
@@ -453,6 +466,7 @@ static void gf_kernel_key_input(struct gf_dev *gf_dev, struct gf_key *gf_key)
 	} else if (GF_KEY_CAMERA == gf_key->key) {
 		key_input = GF_KEY_INPUT_CAMERA;
 	} else {
+		/* add special key define */
 		key_input = gf_key->key;
 	}
 	pr_info("%s: received key event[%d], key=%d, value=%d\n",
@@ -471,21 +485,6 @@ static void gf_kernel_key_input(struct gf_dev *gf_dev, struct gf_key *gf_key)
 		input_sync(gf_dev->input);
 	}
 }
-
-static void gf_auto_send_touchdown()
-{
-	struct fp_underscreen_info tp_info;
-	tp_info.touch_state = 1;
-	gf_opticalfp_irq_handler(&tp_info);
-}
-
-static void gf_auto_send_touchup()
-{
-	struct fp_underscreen_info tp_info;
-	tp_info.touch_state = 0;
-	gf_opticalfp_irq_handler(&tp_info);
-}
-
 
 static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
@@ -509,7 +508,7 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		return -EFAULT;
 
 	if (gf_dev->device_available == 0) {
-			if ((cmd == GF_IOC_ENABLE_POWER) || (cmd == GF_IOC_DISABLE_POWER) || (cmd == GF_IOC_POWER_RESET)) {
+		if ((cmd == GF_IOC_ENABLE_POWER) || (cmd == GF_IOC_DISABLE_POWER)) {
 			pr_info("power cmd\n");
 		} else {
 			pr_info("Sensor is power off currently. \n");
@@ -540,11 +539,6 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		pr_info("%s GF_IOC_RESET. \n", __func__);
 		gf_hw_reset(gf_dev, 10);
 		break;
-	case GF_IOC_POWER_RESET:
-		pr_info("%s GF_IOC_POWER_RESET. \n", __func__);
-		gf_power_reset(gf_dev);
-		gf_dev->device_available = 1;
-		break;
 	case GF_IOC_INPUT_KEY_EVENT:
 		if (copy_from_user(&gf_key, (struct gf_key *)arg, sizeof(struct gf_key))) {
 			pr_info("Failed to copy input key event from user to kernel\n");
@@ -568,11 +562,11 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 #endif
 
 	case GF_IOC_ENABLE_SPI_CLK:
-			pr_debug("%s GF_IOC_ENABLE_SPI_CLK\n", __func__);
+            pr_debug("%s GF_IOC_ENABLE_SPI_CLK\n", __func__);
 #ifdef AP_CONTROL_CLK
 		gfspi_ioctl_clk_enable(gf_dev);
 #else
-		gf_spi_clk_enable(gf_dev);
+        gf_spi_clk_enable(gf_dev);
 		pr_debug("gf_spi_clk_enable.\n");
 #endif
 		break;
@@ -581,7 +575,7 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 #ifdef AP_CONTROL_CLK
 		gfspi_ioctl_clk_disable(gf_dev);
 #else
-		gf_spi_clk_disable(gf_dev);
+        gf_spi_clk_disable(gf_dev);
 		pr_debug("gf_spi_clk_disable\n");
 #endif
 		break;
@@ -630,17 +624,9 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		pr_debug("%s GF_IOC_WAKELOCK_TIMEOUT_DISABLE\n", __func__);
 		wake_unlock(&gf_cmd_wakelock);
 		break;
-	case GF_IOC_CLEAN_TOUCH_FLAG:
+        case GF_IOC_CLEAN_TOUCH_FLAG:
 		lasttouchmode = 0;
 		pr_debug("%s GF_IOC_CLEAN_TOUCH_FLAG\n", __func__);
-		break;
-	case GF_IOC_AUTO_SEND_TOUCHDOWN:
-		pr_info("%s GF_IOC_AUTO_SEND_TOUCHDOWN\n", __func__);
-		gf_auto_send_touchdown();
-		break;
-	case GF_IOC_AUTO_SEND_TOUCHUP:
-		pr_info("%s GF_IOC_AUTO_SEND_TOUCHUP\n", __func__);
-		gf_auto_send_touchup();
 		break;
 	default:
 		pr_warn("unsupport cmd:0x%x\n", cmd);
@@ -672,33 +658,33 @@ static int gf_open(struct inode *inode, struct file *filp)
 		}
 	}
 
-	if (status == 0) {
-		if (status == 0) {
-			gf_dev->users++;
-			filp->private_data = gf_dev;
-			nonseekable_open(inode, filp);
-			pr_info("Succeed to open device. irq = %d\n",
-					gf_dev->irq);
-			if (gf_dev->users == 1) {
-				status = gf_parse_dts(gf_dev);
-				if (status)
-					goto err_parse_dt;
+    if (status == 0) {
+        if (status == 0) {
+            gf_dev->users++;
+            filp->private_data = gf_dev;
+            nonseekable_open(inode, filp);
+            pr_info("Succeed to open device. irq = %d\n",
+                    gf_dev->irq);
+            if (gf_dev->users == 1) {
+                status = gf_parse_dts(gf_dev);
+                if (status)
+                    goto err_parse_dt;
 
-				status = irq_setup(gf_dev);
-				if (status)
-					goto err_irq;
-			}
-		}
-	} else {
-		pr_info("No device for minor %d\n", iminor(inode));
-	}
-	mutex_unlock(&device_list_lock);
+                status = irq_setup(gf_dev);
+                if (status)
+                    goto err_irq;
+            }
+        }
+    } else {
+        pr_info("No device for minor %d\n", iminor(inode));
+    }
+    mutex_unlock(&device_list_lock);
 
-	return status;
+    return status;
 err_irq:
-	gf_cleanup(gf_dev);
+    gf_cleanup(gf_dev);
 err_parse_dt:
-	return status;
+    return status;
 }
 
 #ifdef GF_FASYNC
@@ -715,18 +701,21 @@ static int gf_fasync(int fd, struct file *filp, int mode)
 
 static int gf_release(struct inode *inode, struct file *filp)
 {
-	struct gf_dev *gf_dev = &gf;
-	int status = 0;
+    struct gf_dev *gf_dev = &gf;
+    int status = 0;
 
 	mutex_lock(&device_list_lock);
 	gf_dev = filp->private_data;
 	filp->private_data = NULL;
 
+	/*last close?? */
 	gf_dev->users--;
 	if (!gf_dev->users) {
+
 		pr_info("disble_irq. irq = %d\n", gf_dev->irq);
-		irq_cleanup(gf_dev);
+        irq_cleanup(gf_dev);
         gf_cleanup(gf_dev);
+		/*power off the sensor*/
 		gf_dev->device_available = 0;
 	}
 	mutex_unlock(&device_list_lock);
@@ -735,6 +724,10 @@ static int gf_release(struct inode *inode, struct file *filp)
 
 static const struct file_operations gf_fops = {
 	.owner = THIS_MODULE,
+	/* REVISIT switch to aio primitives, so that userspace
+	 * gets more complete API coverage.  It'll simplify things
+	 * too, except for the locking.
+	 */
 	.unlocked_ioctl = gf_ioctl,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl = gf_compat_ioctl,
@@ -755,31 +748,34 @@ static int goodix_fb_state_chg_callback(struct notifier_block *nb,
 	struct fb_event *evdata = data;
 	unsigned int blank;
 	char msg = 0;
-	int retval = 0;
+    int retval = 0;
 
+	//if (val != FB_EARLY_EVENT_BLANK)
+	//	return 0;
 	pr_info("[info] %s go to the goodix_fb_state_chg_callback value = %d\n",
 			__func__, (int)val);
 	gf_dev = container_of(nb, struct gf_dev, notifier);
 
-	if (val == MTK_ONSCREENFINGERPRINT_EVENT) {
-		uint8_t op_mode = 0x0;
-		op_mode = *(uint8_t *)evdata->data;
+	
+    if (val == MTK_ONSCREENFINGERPRINT_EVENT ) {
+        uint8_t op_mode = 0x0;
+        op_mode = *(uint8_t *)evdata->data;
 
-		switch (op_mode) {
-		case 0:
-			pr_info("[%s] UI disappear\n", __func__);
-			break;
-		case 1:
-			pr_info("[%s] UI ready \n", __func__);
-			msg = GF_NET_EVENT_UI_READY;
-			sendnlmsg(&msg);
-			break;
-		default:
-			pr_info("[%s] Unknown MSM_DRM_ONSCREENFINGERPRINT_EVENT\n", __func__);
-			break;
-		}
-		return retval;
-	}
+        switch (op_mode) {
+        case 0:
+            pr_info("[%s] UI disappear\n", __func__);
+            break;
+       case 1:
+            pr_info("[%s] UI ready \n", __func__);
+            msg = GF_NET_EVENT_UI_READY;
+            sendnlmsg(&msg);
+            break;
+        default:
+            pr_info("[%s] Unknown MSM_DRM_ONSCREENFINGERPRINT_EVENT\n", __func__);
+            break;
+        }
+        return retval;
+    }
 
 	if (evdata && evdata->data && val == FB_EARLY_EVENT_BLANK && gf_dev) {
 		blank = *(int *)(evdata->data);
@@ -824,26 +820,26 @@ static struct notifier_block goodix_noti_block = {
 
 static int gf_opticalfp_irq_handler(struct fp_underscreen_info *tp_info)
 {
-	char msg = 0;
-	fp_tpinfo = *tp_info;
-	if (tp_info->touch_state== lasttouchmode) {
-		pr_info("%s touch_state is lasttouchmode \n", __func__);
-		return IRQ_HANDLED;
-	}
-	wake_lock_timeout(&fp_wakelock, msecs_to_jiffies(WAKELOCK_HOLD_TIME));
-	if (1 == tp_info->touch_state) {
-		pr_info("%s touch down \n", __func__);
-		msg = GF_NET_EVENT_TP_TOUCHDOWN;
-		sendnlmsg(&msg);
-		lasttouchmode = tp_info->touch_state;
-	} else {
-		pr_info("%s touch up \n", __func__);
-		msg = GF_NET_EVENT_TP_TOUCHUP;
-		sendnlmsg(&msg);
-		lasttouchmode = tp_info->touch_state;
-	}
+    char msg = 0;
+    fp_tpinfo = *tp_info;
+    if(tp_info->touch_state== lasttouchmode){
+        pr_info("%s touch_state is lasttouchmode \n", __func__);
+        return IRQ_HANDLED;
+    }
+    wake_lock_timeout(&fp_wakelock, msecs_to_jiffies(WAKELOCK_HOLD_TIME));
+    if (1 == tp_info->touch_state) {
+        pr_info("%s touch down \n", __func__);
+        msg = GF_NET_EVENT_TP_TOUCHDOWN;
+        sendnlmsg(&msg);
+        lasttouchmode = tp_info->touch_state;
+    } else {
+        pr_info("%s touch up \n", __func__);
+        msg = GF_NET_EVENT_TP_TOUCHUP;
+        sendnlmsg(&msg);
+        lasttouchmode = tp_info->touch_state;
+    }
 
-	return IRQ_HANDLED;
+    return IRQ_HANDLED;
 }
 
 static struct class *gf_class;
@@ -857,6 +853,7 @@ static int gf_probe(struct platform_device *pdev)
 	int status = -EINVAL;
 	unsigned long minor;
 	int i;
+	/* Initialize the driver data */
 	INIT_LIST_HEAD(&gf_dev->device_entry);
 #if defined(USE_SPI_BUS)
 	gf_dev->spi = spi;
@@ -869,16 +866,20 @@ static int gf_probe(struct platform_device *pdev)
 	gf_dev->device_available = 0;
 	gf_dev->fb_black = 0;
 
-	mutex_lock(&device_list_lock);
-	minor = find_first_zero_bit(minors, N_SPI_MINORS);
-	if (minor < N_SPI_MINORS) {
-		struct device *dev;
+    // test--------------
+    /* If we can allocate a minor number, hook up this device.
+     * Reusing minors is fine so long as udev or mdev is working.
+     */
+    mutex_lock(&device_list_lock);
+    minor = find_first_zero_bit(minors, N_SPI_MINORS);
+    if (minor < N_SPI_MINORS) {
+        struct device *dev;
 
-		gf_dev->devt = MKDEV(gf_spidev_major, minor);
+		gf_dev->devt = MKDEV(SPIDEV_MAJOR, minor);
 		dev = device_create(gf_class, &gf_dev->spi->dev, gf_dev->devt,
 				gf_dev, GF_DEV_NAME);
 		status = IS_ERR(dev) ? PTR_ERR(dev) : 0;
-		gf_dev->dev = dev;
+        gf_dev->dev = dev;
 	} else {
 		dev_dbg(&gf_dev->spi->dev, "no minor number available!\n");
 		status = -ENODEV;
@@ -895,6 +896,7 @@ static int gf_probe(struct platform_device *pdev)
 	mutex_unlock(&device_list_lock);
 
 	if (status == 0) {
+		/*input device subsystem */
 		gf_dev->input = input_allocate_device();
 		if (gf_dev->input == NULL) {
 			pr_err("%s, failed to allocate input device\n", __func__);
@@ -913,6 +915,7 @@ static int gf_probe(struct platform_device *pdev)
 	}
 #ifdef AP_CONTROL_CLK
 	pr_info("Get the clk resource.\n");
+	/* Enable spi clock */
 	if (gfspi_ioctl_clk_init(gf_dev))
 		goto gfspi_probe_clk_init_failed:
 
@@ -954,7 +957,7 @@ error_dev:
 error_hw:
 	gf_cleanup(gf_dev);
 	gf_dev->device_available = 0;
-	pr_info("%s failed !!!!! \n", __func__);
+    pr_info("%s failed !!!!! \n", __func__);
 
 	return status;
 }
@@ -968,6 +971,7 @@ static int gf_remove(struct platform_device *pdev)
 	struct gf_dev *gf_dev = &gf;
 	wake_lock_destroy(&fp_wakelock);
 	wake_lock_destroy(&gf_cmd_wakelock);
+	/* make sure ops on existing fds can abort cleanly */
 	if (gf_dev->irq)
 		free_irq(gf_dev->irq, gf_dev);
 
@@ -975,12 +979,14 @@ static int gf_remove(struct platform_device *pdev)
 		input_unregister_device(gf_dev->input);
 	input_free_device(gf_dev->input);
 
+	/* prevent new opens */
 	mutex_lock(&device_list_lock);
 	list_del(&gf_dev->device_entry);
 	device_destroy(gf_class, gf_dev->devt);
 	clear_bit(MINOR(gf_dev->devt), minors);
 	if (gf_dev->users == 0)
 		gf_cleanup(gf_dev);
+
 
 	fb_unregister_client(&gf_dev->notifier);
 	mutex_unlock(&device_list_lock);
@@ -1012,27 +1018,30 @@ static int __init gf_init(void)
 {
 	int status;
 
-	if((FP_GOODIX_3268 != get_fpsensor_type())
-		&& (FP_GOODIX_5288 != get_fpsensor_type())
-		&& (FP_GOODIX_5228 != get_fpsensor_type())
-		&& (FP_GOODIX_5658 != get_fpsensor_type())
-		&& (FP_GOODIX_OPTICAL_95 != get_fpsensor_type())
-		&& (FP_GOODIX_3626 != get_fpsensor_type())) {
-		pr_err("%s, found not goodix sensor\n", __func__);
-		status = -EINVAL;
-		return status;
-	}
-
+    if((FP_GOODIX_3268 != get_fpsensor_type())
+        && (FP_GOODIX_5288 != get_fpsensor_type())
+        && (FP_GOODIX_5228 != get_fpsensor_type())
+        && (FP_GOODIX_5658 != get_fpsensor_type())
+        && (FP_GOODIX_OPTICAL_95 != get_fpsensor_type())
+		&& (FP_GOODIX_3626 != get_fpsensor_type())){
+        pr_err("%s, found not goodix sensor\n", __func__);
+        status = -EINVAL;
+        return status;
+    }
+	/* Claim our 256 reserved device numbers.  Then register a class
+	 * that will key udev/mdev to add/remove /dev nodes.  Last, register
+	 * the driver which manages those device numbers.
+	 */
 	BUILD_BUG_ON(N_SPI_MINORS > 256);
-	status = register_chrdev(gf_spidev_major, CHRD_DRIVER_NAME, &gf_fops);
+	status = register_chrdev(SPIDEV_MAJOR, CHRD_DRIVER_NAME, &gf_fops);
 	if (status < 0) {
 		pr_warn("Failed to register char device!\n");
 		return status;
 	}
-	gf_spidev_major = status;
+	SPIDEV_MAJOR = status;
 	gf_class = class_create(THIS_MODULE, CLASS_NAME);
 	if (IS_ERR(gf_class)) {
-		unregister_chrdev(gf_spidev_major, gf_driver.driver.name);
+		unregister_chrdev(SPIDEV_MAJOR, gf_driver.driver.name);
 		pr_warn("Failed to create class.\n");
 		return PTR_ERR(gf_class);
 	}
@@ -1043,7 +1052,7 @@ static int __init gf_init(void)
 #endif
 	if (status < 0) {
 		class_destroy(gf_class);
-		unregister_chrdev(gf_spidev_major, gf_driver.driver.name);
+		unregister_chrdev(SPIDEV_MAJOR, gf_driver.driver.name);
 		pr_warn("Failed to register SPI driver.\n");
                 return status;
 	}
@@ -1051,8 +1060,10 @@ static int __init gf_init(void)
 #ifdef GF_NETLINK_ENABLE
 	netlink_init();
 #endif
-
-	opticalfp_irq_handler_register(gf_opticalfp_irq_handler);
+        /*Register for receiving tp touch event.
+         * Must register after get_fpsensor_type filtration as only one handler can be registered.
+         */
+        opticalfp_irq_handler_register(gf_opticalfp_irq_handler);
 	pr_info("status = 0x%x\n", status);
 	return 0;
 }
@@ -1069,9 +1080,11 @@ static void __exit gf_exit(void)
 	spi_unregister_driver(&gf_driver);
 #endif
 	class_destroy(gf_class);
-	unregister_chrdev(gf_spidev_major, gf_driver.driver.name);
+	unregister_chrdev(SPIDEV_MAJOR, gf_driver.driver.name);
 }
 module_exit(gf_exit);
 
+MODULE_AUTHOR("Jiangtao Yi, <yijiangtao@goodix.com>");
+MODULE_AUTHOR("Jandy Gou, <gouqingsong@goodix.com>");
 MODULE_DESCRIPTION("goodix fingerprint sensor device driver");
 MODULE_LICENSE("GPL");

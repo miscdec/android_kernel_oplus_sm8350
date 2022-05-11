@@ -1,6 +1,16 @@
-/* SPDX-License-Identifier: GPL-2.0-only */
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
+/* include/linux/wakelock.h
+ *
+ * Copyright (C) 2007-2012 Google, Inc.
+ *
+ * This software is licensed under the terms of the GNU General Public
+ * License version 2, as published by the Free Software Foundation, and
+ * may be copied, distributed, and modified under those terms.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
  */
 
 #ifndef _LINUX_WAKELOCK_H
@@ -9,8 +19,13 @@
 #include <linux/ktime.h>
 #include <linux/device.h>
 
+/* A wake_lock prevents the system from entering suspend or other low power
+ * states when active. If the type is set to WAKE_LOCK_SUSPEND, the wake_lock
+ * prevents a full system suspend.
+ */
+
 enum {
-	WAKE_LOCK_SUSPEND,
+	WAKE_LOCK_SUSPEND, /* Prevent suspend */
 	WAKE_LOCK_TYPE_COUNT
 };
 
@@ -34,7 +49,7 @@ static inline void wake_lock_destroy(struct wake_lock *lock)
 	if (!lock) {
 		return;
 	}
-	__pm_relax(&lock->ws);
+    __pm_relax(&lock->ws);
 }
 
 static inline void wake_lock(struct wake_lock *lock)
@@ -57,4 +72,4 @@ static inline int wake_lock_active(struct wake_lock *lock)
 	return lock->ws.active;
 }
 
-#endif  /*_LINUX_WAKELOCK_H*/
+#endif

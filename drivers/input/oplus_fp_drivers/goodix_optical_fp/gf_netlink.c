@@ -1,7 +1,20 @@
-// SPDX-License-Identifier: GPL-2.0-only
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
+/************************************************************************************
+ ** File: - vendor/fingerprint/goodix/gf_hal/gf_queue.c
+ ** OPLUS_FEATURE_FINGERPRINT
+ ** Copyright (C), 2008-2018, OPLUS Mobile Comm Corp., Ltd
+ **
+ ** Description:
+ **      Fingerprint SENSORTEST FOR GOODIX (SW23)
+ **
+ ** Version: 1.0
+ ** Date created: 19:23:15,13/03/2018
+ ** Author: oujinrong@Prd.BaseDrv
+ ** TAG: BSP.Fingerprint.Basic
+ ** --------------------------- Revision History: --------------------------------
+ **    <author>      <data>           <desc>
+ **    oujinrong     2018/03/13       create the file, add fix for problem for coverity 17731
+ **    Ran.Chen    2019/10/23       add for notify_tpinfo_flag
+ ************************************************************************************/
 
 #include <linux/init.h>
 #include <linux/module.h>
@@ -23,44 +36,44 @@ extern struct gf_dev gf;
 
 void sendnlmsg(char *msg)
 {
-	struct sk_buff *skb_1;
-	struct nlmsghdr *nlh;
-	struct netlink_msg_info fp_nl_msg;
-	int len = NLMSG_SPACE(MAX_MSGSIZE);
-	int ret = 0;
-	struct gf_dev *gf_dev = &gf;
+    struct sk_buff *skb_1;
+    struct nlmsghdr *nlh;
+    struct netlink_msg_info fp_nl_msg;
+    int len = NLMSG_SPACE(MAX_MSGSIZE);
+    int ret = 0;
+    struct gf_dev *gf_dev = &gf;
 
-	if (!msg || !nl_sk || !pid) {
-		return;
-	}
-	skb_1 = alloc_skb(len, GFP_KERNEL);
-	if (!skb_1) {
-		pr_err("alloc_skb error\n");
-		return;
-	}
+    if (!msg || !nl_sk || !pid) {
+        return ;
+    }
+    skb_1 = alloc_skb(len, GFP_KERNEL);
+    if (!skb_1) {
+        pr_err("alloc_skb error\n");
+        return;
+    }
 
-	nlh = nlmsg_put(skb_1, 0, 0, 0, MAX_MSGSIZE, 0);
+    nlh = nlmsg_put(skb_1, 0, 0, 0, MAX_MSGSIZE, 0);
 
-	NETLINK_CB(skb_1).portid = 0;
-	NETLINK_CB(skb_1).dst_group = 0;
+    NETLINK_CB(skb_1).portid = 0;
+    NETLINK_CB(skb_1).dst_group = 0;
 
-	fp_nl_msg.netlink_cmd = *msg;
-	if ((gf_dev->notify_tpinfo_flag != 0) && ((fp_nl_msg.netlink_cmd == GF_NET_EVENT_TP_TOUCHDOWN) || (fp_nl_msg.netlink_cmd == GF_NET_EVENT_TP_TOUCHUP))) {
-		fp_nl_msg.tp_info = fp_tpinfo;
-		memcpy(NLMSG_DATA(nlh), &fp_nl_msg , sizeof(struct netlink_msg_info));
-		pr_err("send msg touch_state = %d\n", fp_tpinfo.touch_state);
-		pr_err("send msg area_rate = %d\n", fp_tpinfo.area_rate);
-		pr_err("send msg x = %d\n", fp_tpinfo.x);
-		pr_err("send msg y = %d\n", fp_tpinfo.y);
-	} else if (nlh != NULL) {
-		memcpy(NLMSG_DATA(nlh), msg, sizeof(char));
-		pr_debug("send message: %d\n", *(char *)NLMSG_DATA(nlh));
-	}
+    fp_nl_msg.netlink_cmd = *msg;
+    if( (gf_dev->notify_tpinfo_flag != 0) && ((fp_nl_msg.netlink_cmd == GF_NET_EVENT_TP_TOUCHDOWN) || (fp_nl_msg.netlink_cmd == GF_NET_EVENT_TP_TOUCHUP))) {
+        fp_nl_msg.tp_info = fp_tpinfo;
+        memcpy(NLMSG_DATA(nlh), &fp_nl_msg , sizeof(struct netlink_msg_info));
+        pr_err("send msg touch_state = %d\n", fp_tpinfo.touch_state);
+        pr_err("send msg area_rate = %d\n", fp_tpinfo.area_rate);
+        pr_err("send msg x = %d\n", fp_tpinfo.x);
+        pr_err("send msg y = %d\n", fp_tpinfo.y);
+    } else if (nlh != NULL) {
+        memcpy(NLMSG_DATA(nlh), msg, sizeof(char));
+        pr_debug("send message: %d\n", *(char *)NLMSG_DATA(nlh));
+    }
 
-	ret = netlink_unicast(nl_sk, skb_1, pid, MSG_DONTWAIT);
-	if (!ret) {
-		pr_err("send msg from kernel to usespace failed ret 0x%x\n", ret);
-	}
+    ret = netlink_unicast(nl_sk, skb_1, pid, MSG_DONTWAIT);
+    if (!ret) {
+        pr_err("send msg from kernel to usespace failed ret 0x%x\n", ret);
+    }
 }
 #else
 void sendnlmsg(char *msg)
@@ -70,7 +83,7 @@ void sendnlmsg(char *msg)
 	int len = NLMSG_SPACE(MAX_MSGSIZE);
 	int ret = 0;
 	if (!msg || !nl_sk || !pid) {
-		return;
+		return ;
 	}
 	skb_1 = alloc_skb(len, GFP_KERNEL);
 	if (!skb_1) {
@@ -100,8 +113,9 @@ void nl_data_ready(struct sk_buff *__skb)
 	struct sk_buff *skb;
 	struct nlmsghdr *nlh;
 	char str[100];
-	skb = skb_get(__skb);
-	if (skb->len >= NLMSG_SPACE(0)) {
+	skb = skb_get (__skb);
+	if(skb->len >= NLMSG_SPACE(0))
+	{
 		nlh = nlmsg_hdr(skb);
 
 		if (nlh != NULL) {
@@ -111,6 +125,7 @@ void nl_data_ready(struct sk_buff *__skb)
 
 		kfree_skb(skb);
 	}
+
 }
 
 
@@ -127,7 +142,7 @@ int netlink_init(void)
 	nl_sk = netlink_kernel_create(&init_net, NETLINK_TEST,
 			&netlink_cfg);
 
-	if (!nl_sk) {
+	if(!nl_sk){
 		pr_err("create netlink socket error\n");
 		return 1;
 	}
@@ -137,7 +152,7 @@ int netlink_init(void)
 
 void netlink_exit(void)
 {
-	if (nl_sk != NULL) {
+	if(nl_sk != NULL){
 		netlink_kernel_release(nl_sk);
 		nl_sk = NULL;
 	}

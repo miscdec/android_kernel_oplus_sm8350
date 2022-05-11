@@ -1,11 +1,6 @@
 ifeq ($(CONFIG_OPLUS_FINGERPRINT_QCOM),y)
 ccflags-y += -DQCOM_PLATFORM
-ifeq ($(CONFIG_OPLUS_FINGERPRINT_GKI_DISABLE),y)
-obj-y += gf_qcom.o
-else
-obj-$(CONFIG_OPLUS_FINGERPRINT_GOODIX) += gf_qcom.o
 obj-$(CONFIG_OPLUS_FINGERPRINT_GOODIX_OPTICAL) += gf_qcom.o
-endif
 gf_qcom-y := gf_spi.o gf_platform.o gf_netlink.o
 
 else ifeq ($(CONFIG_OPLUS_FINGERPRINT_MTK),y)
@@ -22,6 +17,7 @@ include $(srctree)/drivers/misc/mediatek/gud/Makefile.include
 endif
 
 ccflags-y += -DMTK_PLATFORM
-obj-y  += gf_tee.o
+
+obj-$(CONFIG_OPLUS_FINGERPRINT_GOODIX_OPTICAL)  += gf_tee.o
 gf_tee-y := gf_spi_tee.o gf_platform_mtk.o gf_netlink.o
 endif
