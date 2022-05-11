@@ -231,16 +231,6 @@ struct oplus_nu1619_ic{
 /*int         batt_volt_2cell_min;*/
 	atomic_t suspended;
 	atomic_t volt_low_flag;
-
-	const char *fw_boot_data;
-	const char *fw_rx_data;
-	const char *fw_tx_data;
-	int fw_boot_lenth;
-	int fw_rx_lenth;
-	int fw_tx_lenth;
-	u32 fw_boot_version;
-	u32 fw_rx_version;
-	u32 fw_tx_version;
 };
 
 struct target_ichg_table {

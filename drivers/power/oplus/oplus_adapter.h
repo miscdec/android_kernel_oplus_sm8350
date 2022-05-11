@@ -1,7 +1,18 @@
-/* SPDX-License-Identifier: GPL-2.0-only  */
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
+/**********************************************************************************
+* Copyright (c)  2008-2015  Guangdong OPLUS Mobile Comm Corp., Ltd
+* OPLUS_FEATURE_CHG_BASIC
+* Description: Charger IC management module for charger system framework.
+*                          Manage all charger IC and define abstarct function flow.
+**
+** Version: 1.0
+** Date created: 21:03:46, 05/04/2012
+** Author: Fuchun.Liao@BSP.CHG.Basic
+**
+** --------------------------- Revision History: ------------------------------------------------------------
+* <version>           <date>                <author>                            <desc>
+* Revision 1.0     2015-06-22        Fuchun.Liao@BSP.CHG.Basic         Created for new architecture from R9
+* Revision 1.1     2018-04-12        Fanhong.Kong@BSP.CHG.Basic        divided for swarp from oplus_warp.c 
+************************************************************************************************************/
 
 //#ifndef _OPLUS_ADAPTER_H_
 //#define _OPLUS_ADAPTER_H_
@@ -40,10 +51,10 @@ struct oplus_adapter_operations {
 
 
 void oplus_adapter_fw_update(void);
-void oplus_vooc_reset_mcu(void);
-void oplus_vooc_set_ap_clk_high(void);
-int oplus_vooc_get_vooc_switch_val(void);
-bool oplus_vooc_check_chip_is_null(void);
+void oplus_warp_reset_mcu(void);
+void oplus_warp_set_ap_clk_high(void);
+int oplus_warp_get_warp_switch_val(void);
+bool oplus_warp_check_chip_is_null(void);
 void oplus_adapter_init(struct oplus_adapter_chip *chip);
 bool oplus_adapter_check_chip_is_null(void);
 

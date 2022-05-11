@@ -160,13 +160,6 @@ static bool get_dload_mode(void)
 	return dload_mode_enabled;
 }
 
-#ifdef CONFIG_OPLUS_FEATURE_PANIC_FLUSH
-bool is_fulldump_enable(void)
-{
-	return download_mode && (dload_type & SCM_DLOAD_FULLDUMP);
-}
-#endif
-
 static void enable_emergency_dload_mode(void)
 {
 	if (emergency_dload_mode_addr) {
@@ -482,14 +475,12 @@ static void msm_restart_prepare(const char *cmd)
 		} else if (!strncmp(cmd, "edl", 3)) {
 			enable_emergency_dload_mode();
 		}
-#ifdef VENDOR_EDIT
-/*zhangchangan@BSP.Bootloader.Bootflow, 2020/05/12, Add for oppo boot mode*/
 		/*xiaofan.yang,2019/01/07,Add for factory agingtest*/
 		//#ifdef OPLUS_FEATURE_AGINGTEST
 		else if(!strcmp(cmd, "sbllowmemtest")){
 			reason = PON_RESTART_REASON_SBL_DDR_CUS;
 			__raw_writel(0x7766550b, restart_reason);
-		}else if (!strcmp(cmd, "sblmemtest")){//oppo factory aging test
+		}else if (!strcmp(cmd, "sblmemtest")){//oplus factory aging test
 			printk("[%s:%d] lunch ddr test!!\n", current->comm, current->pid);
 			reason = PON_RESTART_REASON_SBL_DDRTEST;
 			__raw_writel(0x7766550b, restart_reason);
@@ -525,11 +516,6 @@ static void msm_restart_prepare(const char *cmd)
 			reason = PON_RESTART_REASON_NORMAL;
 			__raw_writel(0x77665501, restart_reason);
 		}
-#else
-		else {
-			__raw_writel(0x77665501, restart_reason);
-		}
-#endif /*VENDOR_EDIT*/
 		if (reason && nvmem_cell)
 			nvmem_cell_write(nvmem_cell, &reason, sizeof(reason));
 		else

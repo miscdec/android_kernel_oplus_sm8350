@@ -36,7 +36,7 @@
 #include <soc/oplus/device_info.h>
 #include <soc/oplus/system/oplus_project.h>
 
-#include "../oplus_vooc.h"
+#include "../oplus_warp.h"
 #include "../oplus_gauge.h"
 #include "../oplus_charger.h"
 #include "../charger_ic/oplus_mp2650.h"
@@ -110,7 +110,6 @@ static int nu1619_get_backcover_color_info(void)
 }
 
 #ifdef OPLUS_FEATURE_CHG_BASIC
-/* Ping.Zhang@BSP.TP.Init, 2020/03/02, Add for notify touchpanel status */
 void __attribute__((weak)) switch_wireless_charger_state(int wireless_state) {return;}
 #endif
 
@@ -130,8 +129,12 @@ static struct wireless_chg_debug_info chg_debug_info = {
 	.break_count = 0,
 	.fastchg_ing = false,
 	.wpc_chg_err = WPC_CHG_IC_ERR_NULL,
+	.highest_temp = 0,
+	.max_iout = 0,
+	.min_cool_down = 0,
+	.min_skewing_current = 0,
+	.wls_auth_fail = 0,
 };
-
 
 /*This array must be consisten with E_FASTCHARGE_LEVEL*/
 static int fasctchg_current[FASTCHARGE_LEVEL_NUM] =
@@ -161,12 +164,12 @@ static int non_ffc_max_vol[FASTCHARGE_LEVEL_NUM] = {
 
 #define COOL_DOWN_12V_THR		4
 
-static int cool_down_svooc[] = {
+static int cool_down_swarp[] = {
 	0, 500, 500, 1200, 1200, 1500, 1500,
 	2000, 2000, 2500, 2500, 3000, 3000,
 };
 
-static int cool_down_vooc[] = {
+static int cool_down_warp[] = {
 	0, 500, 500, 1200, 1200, 1200, 1200,
 };
 
@@ -202,7 +205,7 @@ static struct target_ichg_table ffc_table[] = {
 	{5000, 500, 400}, {5000, 350, 400}, {0, 0, 0},
 };
 
-static struct target_ichg_table svooc_table[] = {
+static struct target_ichg_table swarp_table[] = {
 	{3700, 3000, 1600}, {3700, 2500, 1350}, {3700, 2000, 1100}, {3700, 1500, 850},
 	{3900, 3000, 1700}, {3900, 2500, 1450}, {3900, 2000, 1200}, {3900, 1500, 900},
 	{4100, 3000, 1800}, {4100, 2500, 1500}, {4100, 2000, 1200}, {4100, 1500, 900},
@@ -216,7 +219,7 @@ static struct target_ichg_table epp_table[] = {
 	{0, 0, 0},
 };
 
-static struct target_ichg_table vooc_table[] = {
+static struct target_ichg_table warp_table[] = {
 	{5000, 1200, 950}, {5000, 500, 400}, {5000, 400, 300}, {5000, 200, 400},
 	{0, 0, 0},
 };
@@ -1111,7 +1114,6 @@ static void nu1619_reset_variables(struct oplus_nu1619_ic *chip)
 	chip->pre_quiet_mode_need = SLEEP_MODE_UNKOWN;
 	chip->quiet_mode_ack = false;
 	chip->cep_timeout_ack = false;
-	chip->nu1619_chg_status.wpc_chg_err = WPC_CHG_IC_ERR_NULL;
 }
 
 static void nu1619_init(struct oplus_nu1619_ic *chip)
@@ -1446,7 +1448,7 @@ void nu1619_set_rtx_function(bool is_on)
 		nu1619_start_tx(chip);
 		chip->nu1619_chg_status.wpc_dischg_status = WPC_DISCHG_STATUS_ON;
 
-		//oplus_chg_wireless_error(OPLUS_NOTIFY_WIRELESS_START_TX, NULL);
+		oplus_chg_wireless_error(OPLUS_NOTIFY_WIRELESS_START_TX, NULL);
 
 		/*cancel_delayed_work_sync(&chip->idt_dischg_work);*/
 		schedule_delayed_work(&chip->idt_dischg_work, round_jiffies_relative(msecs_to_jiffies(200)));
@@ -1458,7 +1460,7 @@ void nu1619_set_rtx_function(bool is_on)
 
 		chg_err(" !!!!! <~WPC~> Disable rtx function!\n");
 
-		//oplus_chg_wireless_error(OPLUS_NOTIFY_WIRELESS_STOP_TX, NULL);
+		oplus_chg_wireless_error(OPLUS_NOTIFY_WIRELESS_STOP_TX, NULL);
 		chip->nu1619_chg_status.vout = 0;
 		chip->nu1619_chg_status.iout = 0;
 
@@ -1673,7 +1675,7 @@ static int nu1619_enter_write_mode(struct oplus_nu1619_ic *chip)
 }
 
 
-static int nu1619_write_firmware_data(struct oplus_nu1619_ic *chip, unsigned short addr, unsigned short length)
+static int nu1619_wirte_firmware_data(struct oplus_nu1619_ic *chip, unsigned short addr, unsigned short length)
 {
 	const char *fw_data = NULL;
 	char addr_h, addr_l;
@@ -1684,13 +1686,13 @@ static int nu1619_write_firmware_data(struct oplus_nu1619_ic *chip, unsigned sho
 	int ret;
 	/************write_mtp_addr************/
 	if (addr == 0) {
-		fw_data = chip->fw_boot_data;
+		fw_data = nu1619_fw_data_boot;
 	}
 	if (addr == 256) {
-		fw_data = chip->fw_rx_data;
+		fw_data = nu1619_fw_data_rx;
 	}
 	if (addr == 4864) {
-		fw_data = chip->fw_tx_data;
+		fw_data = nu1619_fw_data_tx;
 	}
 	chg_err("[nu1619] addr=%d length=%d \n", addr, length);
 	addr_h = (char)(addr >> 8);
@@ -1908,19 +1910,19 @@ static bool nu1619_download_firmware_data(struct oplus_nu1619_ic *chip, char are
 	}
 	msleep(10);
 	if (area == BOOT_AREA) {
-		ret = nu1619_write_firmware_data(chip, 0, chip->fw_boot_lenth);
+		ret = nu1619_wirte_firmware_data(chip, 0, sizeof(nu1619_fw_data_boot));
 		if (ret < 0) {
 			return false;
 		}
 	}
 	if (area == RX_AREA) {
-		ret = nu1619_write_firmware_data(chip, 256, chip->fw_rx_lenth);
+		ret = nu1619_wirte_firmware_data(chip, 256, sizeof(nu1619_fw_data_rx));
 		if (ret < 0) {
 			return false;
 		}
 	}
 	if (area == TX_AREA) {
-		ret = nu1619_write_firmware_data(chip, 4864, chip->fw_tx_lenth);
+		ret = nu1619_wirte_firmware_data(chip, 4864, sizeof(nu1619_fw_data_tx));
 		if (ret < 0) {
 			return false;
 		}
@@ -1936,13 +1938,13 @@ static bool nu1619_download_firmware_data(struct oplus_nu1619_ic *chip, char are
 bool nu1619_download_firmware_area(struct oplus_nu1619_ic * chip, char area)
 {
 	bool status = false;
-	/*if (area == BOOT_AREA) {
-		chip->fw_data_lenth = chip->fw_boot_lenth;
+	if (area == BOOT_AREA) {
+		g_fw_data_lenth = sizeof(nu1619_fw_data_boot);
 	} else if (area == RX_AREA) {
-		chip->fw_data_lenth = chip->fw_rx_lenth;
+		g_fw_data_lenth = sizeof(nu1619_fw_data_rx);
 	} else if (area == TX_AREA) {
-		chip->fw_data_lenth = chip->fw_tx_lenth;
-	}*/
+		g_fw_data_lenth = sizeof(nu1619_fw_data_tx);
+	}
 	status = nu1619_download_firmware_data(chip, area);
 	if (!status) {
 		return false;
@@ -2011,21 +2013,21 @@ static bool nu1619_check_firmware_version(struct oplus_nu1619_ic *chip)
 
 	nu1619_req_checksum_and_fw_version(chip, &boot_checksum, &rx_checksum, &tx_checksum, &boot_version, &rx_version, &tx_version);
 	chg_err("check_sum: 0x%x,0x%x,0x%x  Version:0x%x,0x%x,0x%x \n", boot_checksum, rx_checksum, tx_checksum, boot_version, rx_version, tx_version);
-	chg_err("tx (0xff&(~fw_tx_data[13308-5]))=0x%x \n", (0xff & (~chip->fw_tx_data[13308 - 5])));
-	chg_err("rx (0xff&(~fw_rx_data[18428-5]))=0x%x \n", (0xff & (~chip->fw_rx_data[18428 - 5])));
-	chg_err("boot (0xff&(~fw_boot_data[1020-5]))=0x%x \n", (0xff & (~chip->fw_boot_data[1020 - 5])));
+	chg_err("tx (0xff&(~nu1619_fw_data_tx[13308-5]))=0x%x \n", (0xff & (~nu1619_fw_data_tx[13308 - 5])));
+	chg_err("rx (0xff&(~nu1619_fw_data_rx[18428-5]))=0x%x \n", (0xff & (~nu1619_fw_data_rx[18428 - 5])));
+	chg_err("boot (0xff&(~nu1619_fw_data_boot[1020-5]))=0x%x \n", (0xff & (~nu1619_fw_data_boot[1020 - 5])));
 	chip->nu1619_chg_status.boot_version = boot_version;
 	chip->nu1619_chg_status.rx_version = rx_version;
 	chip->nu1619_chg_status.tx_version = tx_version;
-	if ((boot_version == (0xff & (~chip->fw_boot_data[1020 - 5]))) && (boot_checksum == 0x66)) {
+	if ((boot_version == (0xff & (~nu1619_fw_data_boot[1020 - 5]))) && (boot_checksum == 0x66)) {
 		g_boot_no_need_update = true;
 		chg_err("[nu1619] [%s] g_boot_no_need_update = true \n", __func__);
 	}
-	if ((rx_version == (0xff & (~chip->fw_rx_data[18428 - 5]))) && (rx_checksum == 0x66)) {
+	if ((rx_version == (0xff & (~nu1619_fw_data_rx[18428 - 5]))) && (rx_checksum == 0x66)) {
 		g_rx_no_need_update = true;
 		chg_err("[nu1619] [%s] g_rx_no_need_update = true \n", __func__);
 	}
-	if ((tx_version == (0xff & (~chip->fw_tx_data[13308 - 5]))) && (tx_checksum == 0x66)) {
+	if ((tx_version == (0xff & (~nu1619_fw_data_tx[13308 - 5]))) && (tx_checksum == 0x66)) {
 		g_tx_no_need_update = true;
 		chg_err("[nu1619] [%s] g_tx_no_need_update = true \n", __func__);
 	}
@@ -2866,31 +2868,6 @@ static int oplus_wpc_chg_parse_chg_dt(struct oplus_nu1619_ic *chip)
 	int rc;
 	struct device_node *node = chip->dev->of_node;
 
-	chip->fw_boot_data = (char *)of_get_property(node, "oplus,fw_boot_data", &chip->fw_boot_lenth);
-	if (!chip->fw_boot_data) {
-		pr_err("parse fw boot data failed\n");
-		chip->fw_boot_data = nu1619_fw_data_boot;
-		chip->fw_boot_lenth = sizeof(nu1619_fw_data_boot);
-	} else {
-		pr_err("parse fw boot data lenth[%d]\n", chip->fw_boot_lenth);
-	}
-	chip->fw_rx_data = (char *)of_get_property(node, "oplus,fw_rx_data", &chip->fw_rx_lenth);
-	if (!chip->fw_rx_data) {
-		pr_err("parse fw rx data failed\n");
-		chip->fw_rx_data = nu1619_fw_data_rx;
-		chip->fw_rx_lenth = sizeof(nu1619_fw_data_rx);
-	} else {
-		pr_err("parse fw rx data lenth[%d]\n", chip->fw_rx_lenth);
-	}
-	chip->fw_tx_data = (char *)of_get_property(node, "oplus,fw_tx_data", &chip->fw_tx_lenth);
-	if (!chip->fw_tx_data) {
-		pr_err("parse fw tx data failed\n");
-		chip->fw_tx_data = nu1619_fw_data_tx;
-		chip->fw_tx_lenth = sizeof(nu1619_fw_data_tx);
-	} else {
-		pr_err("parse fw tx data lenth[%d]\n", chip->fw_tx_lenth);
-	}
-
 	if (!node) {
 		chg_err("device tree info. missing\n");
 		return -EINVAL;
@@ -2945,40 +2922,40 @@ static int oplus_wpc_chg_parse_chg_dt(struct oplus_nu1619_ic *chip)
 	}
 	chg_err("epp_input_step_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.epp_input_step_ma);
 
-	rc = of_property_read_u32(node, "qcom,vooc_input_ma",
-			&chip->nu1619_chg_status.wpc_chg_param.vooc_input_ma);
+	rc = of_property_read_u32(node, "qcom,warp_input_ma",
+			&chip->nu1619_chg_status.wpc_chg_param.warp_input_ma);
 	if (rc) {
-		chip->nu1619_chg_status.wpc_chg_param.vooc_input_ma = 1000;
+		chip->nu1619_chg_status.wpc_chg_param.warp_input_ma = 1000;
 	}
-	chg_err("vooc_input_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.vooc_input_ma);
+	chg_err("warp_input_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.warp_input_ma);
 
-	rc = of_property_read_u32(node, "qcom,vooc_iout_ma",
-			&chip->nu1619_chg_status.wpc_chg_param.vooc_iout_ma);
+	rc = of_property_read_u32(node, "qcom,warp_iout_ma",
+			&chip->nu1619_chg_status.wpc_chg_param.warp_iout_ma);
 	if (rc) {
-		chip->nu1619_chg_status.wpc_chg_param.vooc_iout_ma = 1000;
+		chip->nu1619_chg_status.wpc_chg_param.warp_iout_ma = 1000;
 	}
-	chg_err("vooc_iout_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.vooc_iout_ma);
+	chg_err("warp_iout_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.warp_iout_ma);
 
-	rc = of_property_read_u32(node, "qcom,svooc_input_ma",
-			&chip->nu1619_chg_status.wpc_chg_param.svooc_input_ma);
+	rc = of_property_read_u32(node, "qcom,swarp_input_ma",
+			&chip->nu1619_chg_status.wpc_chg_param.swarp_input_ma);
 	if (rc) {
-		chip->nu1619_chg_status.wpc_chg_param.svooc_input_ma = 1000;
+		chip->nu1619_chg_status.wpc_chg_param.swarp_input_ma = 1000;
 	}
-	chg_err("svooc_input_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.svooc_input_ma);
+	chg_err("swarp_input_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.swarp_input_ma);
 
-	rc = of_property_read_u32(node, "qcom,svooc_65w_iout_ma",
-			&chip->nu1619_chg_status.wpc_chg_param.svooc_65w_iout_ma);
+	rc = of_property_read_u32(node, "qcom,swarp_65w_iout_ma",
+			&chip->nu1619_chg_status.wpc_chg_param.swarp_65w_iout_ma);
 	if (rc) {
-		chip->nu1619_chg_status.wpc_chg_param.svooc_65w_iout_ma = 2000;
+		chip->nu1619_chg_status.wpc_chg_param.swarp_65w_iout_ma = 2000;
 	}
-	chg_err("svooc_65w_iout_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.svooc_65w_iout_ma);
+	chg_err("swarp_65w_iout_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.swarp_65w_iout_ma);
 
-	rc = of_property_read_u32(node, "qcom,svooc_50w_iout_ma",
-			&chip->nu1619_chg_status.wpc_chg_param.svooc_50w_iout_ma);
+	rc = of_property_read_u32(node, "qcom,swarp_50w_iout_ma",
+			&chip->nu1619_chg_status.wpc_chg_param.swarp_50w_iout_ma);
 	if (rc) {
-		chip->nu1619_chg_status.wpc_chg_param.svooc_50w_iout_ma = 1750;
+		chip->nu1619_chg_status.wpc_chg_param.swarp_50w_iout_ma = 1750;
 	}
-	chg_err("svooc_50w_iout_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.svooc_50w_iout_ma);
+	chg_err("swarp_50w_iout_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.swarp_50w_iout_ma);
 
 	rc = of_property_read_u32(node, "qcom,bpp_temp_cold_fastchg_ma",
 			&chip->nu1619_chg_status.wpc_chg_param.bpp_temp_cold_fastchg_ma);
@@ -2987,26 +2964,26 @@ static int oplus_wpc_chg_parse_chg_dt(struct oplus_nu1619_ic *chip)
 	}
 	chg_err("temp_cold_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.bpp_temp_cold_fastchg_ma);
 
-	rc = of_property_read_u32(node, "qcom,vooc_temp_little_cold_fastchg_ma",
-			&chip->nu1619_chg_status.wpc_chg_param.vooc_temp_little_cold_fastchg_ma);
+	rc = of_property_read_u32(node, "qcom,warp_temp_little_cold_fastchg_ma",
+			&chip->nu1619_chg_status.wpc_chg_param.warp_temp_little_cold_fastchg_ma);
 	if (rc) {
-		chip->nu1619_chg_status.wpc_chg_param.vooc_temp_little_cold_fastchg_ma = 1200;
+		chip->nu1619_chg_status.wpc_chg_param.warp_temp_little_cold_fastchg_ma = 1200;
 	}
-	chg_err("vooc_temp_little_cold_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.vooc_temp_little_cold_fastchg_ma);
+	chg_err("warp_temp_little_cold_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.warp_temp_little_cold_fastchg_ma);
 
-	rc = of_property_read_u32(node, "qcom,svooc_temp_little_cold_iout_ma",
-			&chip->nu1619_chg_status.wpc_chg_param.svooc_temp_little_cold_iout_ma);
+	rc = of_property_read_u32(node, "qcom,swarp_temp_little_cold_iout_ma",
+			&chip->nu1619_chg_status.wpc_chg_param.swarp_temp_little_cold_iout_ma);
 	if (rc) {
-		chip->nu1619_chg_status.wpc_chg_param.svooc_temp_little_cold_iout_ma = 650;
+		chip->nu1619_chg_status.wpc_chg_param.swarp_temp_little_cold_iout_ma = 650;
 	}
-	chg_err("svooc_temp_little_cold_iout_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.svooc_temp_little_cold_iout_ma);
+	chg_err("swarp_temp_little_cold_iout_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.swarp_temp_little_cold_iout_ma);
 
-	rc = of_property_read_u32(node, "qcom,svooc_temp_little_cold_fastchg_ma",
-			&chip->nu1619_chg_status.wpc_chg_param.svooc_temp_little_cold_fastchg_ma);
+	rc = of_property_read_u32(node, "qcom,swarp_temp_little_cold_fastchg_ma",
+			&chip->nu1619_chg_status.wpc_chg_param.swarp_temp_little_cold_fastchg_ma);
 	if (rc) {
-		chip->nu1619_chg_status.wpc_chg_param.svooc_temp_little_cold_fastchg_ma = 1200;
+		chip->nu1619_chg_status.wpc_chg_param.swarp_temp_little_cold_fastchg_ma = 1200;
 	}
-	chg_err("svooc_temp_little_cold_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.svooc_temp_little_cold_fastchg_ma);
+	chg_err("swarp_temp_little_cold_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.swarp_temp_little_cold_fastchg_ma);
 
 	rc = of_property_read_u32(node, "qcom,bpp_temp_little_cold_fastchg_ma",
 			&chip->nu1619_chg_status.wpc_chg_param.bpp_temp_little_cold_fastchg_ma);
@@ -3029,26 +3006,26 @@ static int oplus_wpc_chg_parse_chg_dt(struct oplus_nu1619_ic *chip)
 	}
 	chg_err("epp_15w_temp_little_cold_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.epp_15w_temp_little_cold_fastchg_ma);
 
-	rc = of_property_read_u32(node, "qcom,vooc_temp_cool_fastchg_ma",
-			&chip->nu1619_chg_status.wpc_chg_param.vooc_temp_cool_fastchg_ma);
+	rc = of_property_read_u32(node, "qcom,warp_temp_cool_fastchg_ma",
+			&chip->nu1619_chg_status.wpc_chg_param.warp_temp_cool_fastchg_ma);
 	if (rc) {
-		chip->nu1619_chg_status.wpc_chg_param.vooc_temp_cool_fastchg_ma = 1200;
+		chip->nu1619_chg_status.wpc_chg_param.warp_temp_cool_fastchg_ma = 1200;
 	}
-	chg_err("vooc_temp_cool_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.vooc_temp_cool_fastchg_ma);
+	chg_err("warp_temp_cool_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.warp_temp_cool_fastchg_ma);
 
-	rc = of_property_read_u32(node, "qcom,svooc_temp_cool_iout_ma",
-			&chip->nu1619_chg_status.wpc_chg_param.svooc_temp_cool_iout_ma);
+	rc = of_property_read_u32(node, "qcom,swarp_temp_cool_iout_ma",
+			&chip->nu1619_chg_status.wpc_chg_param.swarp_temp_cool_iout_ma);
 	if (rc) {
-		chip->nu1619_chg_status.wpc_chg_param.svooc_temp_cool_iout_ma = 650;
+		chip->nu1619_chg_status.wpc_chg_param.swarp_temp_cool_iout_ma = 650;
 	}
-	chg_err("svooc_temp_cool_iout_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.svooc_temp_cool_iout_ma);
+	chg_err("swarp_temp_cool_iout_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.swarp_temp_cool_iout_ma);
 
-	rc = of_property_read_u32(node, "qcom,svooc_temp_cool_fastchg_ma",
-			&chip->nu1619_chg_status.wpc_chg_param.svooc_temp_cool_fastchg_ma);
+	rc = of_property_read_u32(node, "qcom,swarp_temp_cool_fastchg_ma",
+			&chip->nu1619_chg_status.wpc_chg_param.swarp_temp_cool_fastchg_ma);
 	if (rc) {
-		chip->nu1619_chg_status.wpc_chg_param.svooc_temp_cool_fastchg_ma = 1200;
+		chip->nu1619_chg_status.wpc_chg_param.swarp_temp_cool_fastchg_ma = 1200;
 	}
-	chg_err("svooc_temp_cool_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.svooc_temp_cool_fastchg_ma);
+	chg_err("swarp_temp_cool_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.swarp_temp_cool_fastchg_ma);
 
 	rc = of_property_read_u32(node, "qcom,bpp_temp_cool_fastchg_ma",
 			&chip->nu1619_chg_status.wpc_chg_param.bpp_temp_cool_fastchg_ma);
@@ -3071,19 +3048,19 @@ static int oplus_wpc_chg_parse_chg_dt(struct oplus_nu1619_ic *chip)
 	}
 	chg_err("epp_15w_temp_cool_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.epp_15w_temp_cool_fastchg_ma);
 
-	rc = of_property_read_u32(node, "qcom,vooc_temp_little_cool_fastchg_ma",
-			&chip->nu1619_chg_status.wpc_chg_param.vooc_temp_little_cool_fastchg_ma);
+	rc = of_property_read_u32(node, "qcom,warp_temp_little_cool_fastchg_ma",
+			&chip->nu1619_chg_status.wpc_chg_param.warp_temp_little_cool_fastchg_ma);
 	if (rc) {
-		chip->nu1619_chg_status.wpc_chg_param.vooc_temp_little_cool_fastchg_ma = 1200;
+		chip->nu1619_chg_status.wpc_chg_param.warp_temp_little_cool_fastchg_ma = 1200;
 	}
-	chg_err("vooc_temp_little_cool_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.vooc_temp_little_cool_fastchg_ma);
+	chg_err("warp_temp_little_cool_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.warp_temp_little_cool_fastchg_ma);
 
-	rc = of_property_read_u32(node, "qcom,svooc_temp_little_cool_fastchg_ma",
-			&chip->nu1619_chg_status.wpc_chg_param.svooc_temp_little_cool_fastchg_ma);
+	rc = of_property_read_u32(node, "qcom,swarp_temp_little_cool_fastchg_ma",
+			&chip->nu1619_chg_status.wpc_chg_param.swarp_temp_little_cool_fastchg_ma);
 	if (rc) {
-		chip->nu1619_chg_status.wpc_chg_param.svooc_temp_little_cool_fastchg_ma = 1200;
+		chip->nu1619_chg_status.wpc_chg_param.swarp_temp_little_cool_fastchg_ma = 1200;
 	}
-	chg_err("svooc_temp_little_cool_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.svooc_temp_little_cool_fastchg_ma);
+	chg_err("swarp_temp_little_cool_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.swarp_temp_little_cool_fastchg_ma);
 
 	rc = of_property_read_u32(node, "qcom,bpp_temp_little_cool_fastchg_ma",
 			&chip->nu1619_chg_status.wpc_chg_param.bpp_temp_little_cool_fastchg_ma);
@@ -3106,19 +3083,19 @@ static int oplus_wpc_chg_parse_chg_dt(struct oplus_nu1619_ic *chip)
 	}
 	chg_err("epp_15w_temp_little_cool_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.epp_15w_temp_little_cool_fastchg_ma);
 
-	rc = of_property_read_u32(node, "qcom,vooc_temp_normal_fastchg_ma",
-			&chip->nu1619_chg_status.wpc_chg_param.vooc_temp_normal_fastchg_ma);
+	rc = of_property_read_u32(node, "qcom,warp_temp_normal_fastchg_ma",
+			&chip->nu1619_chg_status.wpc_chg_param.warp_temp_normal_fastchg_ma);
 	if (rc) {
-		chip->nu1619_chg_status.wpc_chg_param.vooc_temp_normal_fastchg_ma = 1200;
+		chip->nu1619_chg_status.wpc_chg_param.warp_temp_normal_fastchg_ma = 1200;
 	}
-	chg_err("vooc_temp_normal_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.vooc_temp_normal_fastchg_ma);
+	chg_err("warp_temp_normal_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.warp_temp_normal_fastchg_ma);
 
-	rc = of_property_read_u32(node, "qcom,svooc_temp_normal_fastchg_ma",
-			&chip->nu1619_chg_status.wpc_chg_param.svooc_temp_normal_fastchg_ma);
+	rc = of_property_read_u32(node, "qcom,swarp_temp_normal_fastchg_ma",
+			&chip->nu1619_chg_status.wpc_chg_param.swarp_temp_normal_fastchg_ma);
 	if (rc) {
-		chip->nu1619_chg_status.wpc_chg_param.svooc_temp_normal_fastchg_ma = 1200;
+		chip->nu1619_chg_status.wpc_chg_param.swarp_temp_normal_fastchg_ma = 1200;
 	}
-	chg_err("svooc_temp_normal_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.svooc_temp_normal_fastchg_ma);
+	chg_err("swarp_temp_normal_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.swarp_temp_normal_fastchg_ma);
 
 	rc = of_property_read_u32(node, "qcom,bpp_temp_normal_fastchg_ma",
 			&chip->nu1619_chg_status.wpc_chg_param.bpp_temp_normal_fastchg_ma);
@@ -3141,19 +3118,19 @@ static int oplus_wpc_chg_parse_chg_dt(struct oplus_nu1619_ic *chip)
 	}
 	chg_err("epp_15w_temp_normal_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.epp_15w_temp_normal_fastchg_ma);
 
-	rc = of_property_read_u32(node, "qcom,vooc_temp_warm_fastchg_ma",
-			&chip->nu1619_chg_status.wpc_chg_param.vooc_temp_warm_fastchg_ma);
+	rc = of_property_read_u32(node, "qcom,warp_temp_warm_fastchg_ma",
+			&chip->nu1619_chg_status.wpc_chg_param.warp_temp_warm_fastchg_ma);
 	if (rc) {
-		chip->nu1619_chg_status.wpc_chg_param.vooc_temp_warm_fastchg_ma = 1200;
+		chip->nu1619_chg_status.wpc_chg_param.warp_temp_warm_fastchg_ma = 1200;
 	}
-	chg_err("vooc_temp_warm_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.vooc_temp_warm_fastchg_ma);
+	chg_err("warp_temp_warm_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.warp_temp_warm_fastchg_ma);
 
-	rc = of_property_read_u32(node, "qcom,svooc_temp_warm_fastchg_ma",
-			&chip->nu1619_chg_status.wpc_chg_param.svooc_temp_warm_fastchg_ma);
+	rc = of_property_read_u32(node, "qcom,swarp_temp_warm_fastchg_ma",
+			&chip->nu1619_chg_status.wpc_chg_param.swarp_temp_warm_fastchg_ma);
 	if (rc) {
-		chip->nu1619_chg_status.wpc_chg_param.svooc_temp_warm_fastchg_ma = 1200;
+		chip->nu1619_chg_status.wpc_chg_param.swarp_temp_warm_fastchg_ma = 1200;
 	}
-	chg_err("svooc_temp_warm_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.svooc_temp_warm_fastchg_ma);
+	chg_err("swarp_temp_warm_fastchg_ma[%d]\n", chip->nu1619_chg_status.wpc_chg_param.swarp_temp_warm_fastchg_ma);
 
 	rc = of_property_read_u32(node, "qcom,bpp_temp_warm_fastchg_ma",
 			&chip->nu1619_chg_status.wpc_chg_param.bpp_temp_warm_fastchg_ma);
@@ -3194,9 +3171,9 @@ static bool oplus_wpc_get_fastchg_allow(struct oplus_nu1619_ic *chip)
 	temp = oplus_chg_get_chg_temperature();
 	cap = oplus_chg_get_ui_soc();
 
-	if(chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_VOOC
-		&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_SVOOC
-		&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_SVOOC_50W) {
+	if(chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_WARP
+		&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_SWARP
+		&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_SWARP_50W) {
 		chip->nu1619_chg_status.fastchg_allow = false;
 		return chip->nu1619_chg_status.fastchg_allow;
 	}
@@ -3206,13 +3183,13 @@ static bool oplus_wpc_get_fastchg_allow(struct oplus_nu1619_ic *chip)
 		return chip->nu1619_chg_status.fastchg_allow;
 	}
 */
-	if (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_VOOC
+	if (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_WARP
 			&& (temp < 0 || temp > 450)) {
 		chip->nu1619_chg_status.fastchg_allow = false;
 		return chip->nu1619_chg_status.fastchg_allow;
 	}
-	if ((chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SVOOC_50W
-			|| chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SVOOC)
+	if ((chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SWARP_50W
+			|| chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SWARP)
 			&& (temp < -20 || temp > 530)) {
 		chip->nu1619_chg_status.fastchg_allow = false;
 		return chip->nu1619_chg_status.fastchg_allow;
@@ -3288,8 +3265,8 @@ static void nu1619_charge_check_normal_temp_region(struct oplus_nu1619_ic *chip)
 	}
 }
 
-#define AIR_VOOC	1
-#define AIR_SVOOC	2
+#define AIR_warp	1
+#define AIR_Swarp	2
 static int nu1916_charge_get_skewing_input_current(struct oplus_nu1619_ic *chip)
 {
 	int i = 0;
@@ -3305,11 +3282,11 @@ static int nu1916_charge_get_skewing_input_current(struct oplus_nu1619_ic *chip)
 	static int adjust_current_delay = 0;
 	static int self_reset_cnt = 0;
 
-	if (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SVOOC_50W
-			|| chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SVOOC)
-		adapter_type = AIR_SVOOC;
-	else if (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_VOOC)
-		adapter_type = AIR_VOOC;
+	if (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SWARP_50W
+			|| chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SWARP)
+		adapter_type = AIR_Swarp;
+	else if (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_WARP)
+		adapter_type = AIR_warp;
 	else {
 		cep_zero_cnt = 0;
 		cep_nonzero_cnt = 0;
@@ -3320,7 +3297,7 @@ static int nu1916_charge_get_skewing_input_current(struct oplus_nu1619_ic *chip)
 	}
 
 	if (chip->nu1619_chg_status.skewing_fastcharge_level == FASTCHARGE_LEVEL_UNKNOW) {
-		if (adapter_type == AIR_SVOOC)
+		if (adapter_type == AIR_Swarp)
 			chip->nu1619_chg_status.skewing_fastcharge_level = FASTCHARGE_LEVEL_1;
 		else
 			chip->nu1619_chg_status.skewing_fastcharge_level = FASTCHARGE_LEVEL_5;
@@ -3360,11 +3337,11 @@ static int nu1916_charge_get_skewing_input_current(struct oplus_nu1619_ic *chip)
 				&& pre_wpc_skewing_proc == true) {
 			pre_wpc_skewing_proc = false;
 			chg_err("<~WPC~> turn to wpc_skewing_proc = false, resume fastchg level.\n");
-			if (adapter_type == AIR_SVOOC) {
+			if (adapter_type == AIR_Swarp) {
 				if (chip->nu1619_chg_status.skewing_fastcharge_level >= FASTCHARGE_LEVEL_4)
 					skewing_level = FASTCHARGE_LEVEL_4;
 			}
-			if (adapter_type == AIR_VOOC)
+			if (adapter_type == AIR_warp)
 				skewing_level = FASTCHARGE_LEVEL_5;
 		}
 	}
@@ -3376,8 +3353,8 @@ static int nu1916_charge_get_skewing_input_current(struct oplus_nu1619_ic *chip)
 			chg_err("<~WPC~> turn to wpc_skewing_proc = true\n");
 			chip->nu1619_chg_status.wpc_skewing_proc = true;
 		}
-		if (adapter_type == AIR_SVOOC) {
-			input_current_to_target_ichg(vbatt, input_current, svooc_table, i, target_ichg);
+		if (adapter_type == AIR_Swarp) {
+			input_current_to_target_ichg(vbatt, input_current, swarp_table, i, target_ichg);
 			/*the max input of L4 and L5 is the same 950*/
 			if (chip->nu1619_chg_status.skewing_fastcharge_level == FASTCHARGE_LEVEL_5
 					&& target_ichg == fasctchg_current[FASTCHARGE_LEVEL_4]) {
@@ -3395,8 +3372,8 @@ static int nu1916_charge_get_skewing_input_current(struct oplus_nu1619_ic *chip)
 				skewing_level = FASTCHARGE_LEVEL_9;
 			else
 				skewing_level = FASTCHARGE_LEVEL_UNKNOW;
-		} else if (adapter_type == AIR_VOOC) {
-			input_current_to_target_ichg(vbatt, input_current, vooc_table, i, target_ichg);
+		} else if (adapter_type == AIR_warp) {
+			input_current_to_target_ichg(vbatt, input_current, warp_table, i, target_ichg);
 			if (target_ichg == fasctchg_current[FASTCHARGE_LEVEL_5])
 				skewing_level = FASTCHARGE_LEVEL_9;
 			else
@@ -3404,7 +3381,7 @@ static int nu1916_charge_get_skewing_input_current(struct oplus_nu1619_ic *chip)
 		}
 	}
 
-	if (adapter_type == AIR_VOOC) {
+	if (adapter_type == AIR_warp) {
 		if (g_oplus_chip->icharging > -800 && oplus_gauge_get_batt_current() > -800) {
 			self_reset_cnt++;
 			if (self_reset_cnt > 10) {
@@ -3426,10 +3403,10 @@ static int nu1916_charge_get_skewing_input_current(struct oplus_nu1619_ic *chip)
 	target_ichg = fasctchg_current[chip->nu1619_chg_status.skewing_fastcharge_level];
 	target_ichg_to_input_current(vbatt, target_ichg, ffc_table, i, input_current);
 	temp_input_current = input_current;
-	if (adapter_type == AIR_SVOOC)
-		target_ichg_to_input_current(vbatt, target_ichg, svooc_table, i, input_current);
-	else if (adapter_type == AIR_VOOC)
-		target_ichg_to_input_current(vbatt, target_ichg, vooc_table, i, input_current);
+	if (adapter_type == AIR_Swarp)
+		target_ichg_to_input_current(vbatt, target_ichg, swarp_table, i, input_current);
+	else if (adapter_type == AIR_warp)
+		target_ichg_to_input_current(vbatt, target_ichg, warp_table, i, input_current);
 	if (temp_input_current < input_current)
 		input_current = temp_input_current;
 	return input_current;
@@ -3470,8 +3447,8 @@ static void nu1619_charge_check_ffc_status(struct oplus_nu1619_ic *chip)
 			chip->nu1619_chg_status.wpc_ffc_charge = false;
 		}
 	} else {
-		if ((chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SVOOC_50W
-				|| chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SVOOC)
+		if ((chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SWARP_50W
+				|| chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SWARP)
 				&& g_oplus_chip->temperature > WPC_CHARGE_FFC_TEMP_MIN
 				&& g_oplus_chip->temperature < (WPC_CHARGE_FFC_TEMP_MAX - 20)
 				&& g_oplus_chip->batt_volt >= P922X_PRE2CC_CHG_THD_LO
@@ -3492,8 +3469,8 @@ static void nu1619_charge_check_ffc_status(struct oplus_nu1619_ic *chip)
 
 static void nu1619_charge_set_ffc_fast_current(struct oplus_nu1619_ic *chip)
 {
-	if (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SVOOC_50W
-			|| chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SVOOC) {
+	if (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SWARP_50W
+			|| chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SWARP) {
 		if (chip->nu1619_chg_status.wpc_ffc_charge == true) {
 			if (chip->nu1619_chg_status.fastcharge_level == FASTCHARGE_LEVEL_7
 					&& chip->nu1619_chg_status.charge_current != fasctchg_current[FASTCHARGE_LEVEL_7])
@@ -3565,10 +3542,10 @@ static int nu1619_charge_get_ffc_input_current(struct oplus_nu1619_ic *chip)
 		if (non_ffc_level == FASTCHARGE_LEVEL_UNKNOW) {
 			pre_adapter_type = chip->nu1619_chg_status.adapter_type;
 			pre_rx_runing_mode = chip->nu1619_chg_status.rx_runing_mode;
-			if (pre_adapter_type == ADAPTER_TYPE_SVOOC_50W
-					|| pre_adapter_type == ADAPTER_TYPE_SVOOC)
+			if (pre_adapter_type == ADAPTER_TYPE_SWARP_50W
+					|| pre_adapter_type == ADAPTER_TYPE_SWARP)
 				non_ffc_level = FASTCHARGE_LEVEL_1;
-			else if (pre_adapter_type == ADAPTER_TYPE_VOOC)
+			else if (pre_adapter_type == ADAPTER_TYPE_WARP)
 				non_ffc_level = FASTCHARGE_LEVEL_5;
 			else if (pre_adapter_type == ADAPTER_TYPE_EPP
 					&& pre_rx_runing_mode == RX_RUNNING_MODE_EPP_15W)
@@ -3582,10 +3559,10 @@ static int nu1619_charge_get_ffc_input_current(struct oplus_nu1619_ic *chip)
 			chg_err("<~WPC~> adapter_type or rx_runing_mode change.\n");
 			pre_adapter_type = chip->nu1619_chg_status.adapter_type;
 			pre_rx_runing_mode = chip->nu1619_chg_status.rx_runing_mode;
-			if (pre_adapter_type == ADAPTER_TYPE_SVOOC_50W
-					|| pre_adapter_type == ADAPTER_TYPE_SVOOC)
+			if (pre_adapter_type == ADAPTER_TYPE_SWARP_50W
+					|| pre_adapter_type == ADAPTER_TYPE_SWARP)
 				non_ffc_level = FASTCHARGE_LEVEL_1;
-			else if (pre_adapter_type == ADAPTER_TYPE_VOOC)
+			else if (pre_adapter_type == ADAPTER_TYPE_WARP)
 				non_ffc_level = FASTCHARGE_LEVEL_5;
 			else if (pre_rx_runing_mode == RX_RUNNING_MODE_EPP_15W)
 				non_ffc_level = FASTCHARGE_LEVEL_4;
@@ -3611,7 +3588,6 @@ static int nu1619_charge_get_ffc_input_current(struct oplus_nu1619_ic *chip)
 					return input_current;
 				}
 				chg_err("<~WPC~> switch to non ffc level[%d].\n", non_ffc_level);
-				//adjust_current_delay = WPC_ADJUST_CV_DELAY * 2;
 			}
 		}
 	}
@@ -3629,9 +3605,9 @@ static int nu1619_charge_get_ffc_input_current(struct oplus_nu1619_ic *chip)
 	if (chip->nu1619_chg_status.rx_runing_mode == RX_RUNNING_MODE_EPP_15W
 			&& target_ichg == fasctchg_current[FASTCHARGE_LEVEL_4])
 		target_ichg_to_input_current(vbatt, target_ichg, epp_table, i, input_current);
-	if (chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_SVOOC_50W
-			&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_SVOOC
-			&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_VOOC
+	if (chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_SWARP_50W
+			&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_SWARP
+			&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_WARP
 			&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_EPP)
 		target_ichg_to_input_current(vbatt, target_ichg, bpp_table, i, input_current);
 
@@ -3648,11 +3624,11 @@ static int nu1619_charge_get_cv_target_ichg(struct oplus_nu1619_ic *chip)
 		return 0;
 
 	switch (chip->nu1619_chg_status.adapter_type) {
-	case ADAPTER_TYPE_SVOOC:
-	case ADAPTER_TYPE_SVOOC_50W:
+	case ADAPTER_TYPE_SWARP:
+	case ADAPTER_TYPE_SWARP_50W:
 		cv_target_ichg = FASTCHG_CUR_CV;
 		break;
-	case ADAPTER_TYPE_VOOC:
+	case ADAPTER_TYPE_WARP:
 		cv_target_ichg = BPP_CUR_CV;
 		break;
 	case ADAPTER_TYPE_EPP:
@@ -3672,18 +3648,18 @@ static int nu1916_charge_get_cool_down_target_ichg(struct oplus_nu1619_ic *chip)
 	int cool_down = g_oplus_chip->cool_down;
 
 	switch (chip->nu1619_chg_status.adapter_type) {
-	case ADAPTER_TYPE_SVOOC:
-	case ADAPTER_TYPE_SVOOC_50W:
-		if (cool_down >= ARRAY_SIZE(cool_down_svooc)
-				&& ARRAY_SIZE(cool_down_svooc) > 1)
-			cool_down = ARRAY_SIZE(cool_down_svooc) - 1;
-		cool_down_target_ichg = cool_down_svooc[cool_down];
+	case ADAPTER_TYPE_SWARP:
+	case ADAPTER_TYPE_SWARP_50W:
+		if (cool_down >= ARRAY_SIZE(cool_down_swarp)
+				&& ARRAY_SIZE(cool_down_swarp) > 1)
+			cool_down = ARRAY_SIZE(cool_down_swarp) - 1;
+		cool_down_target_ichg = cool_down_swarp[cool_down];
 		break;
-	case ADAPTER_TYPE_VOOC:
-		if (cool_down >= ARRAY_SIZE(cool_down_vooc)
-				&& ARRAY_SIZE(cool_down_vooc) > 1)
-			cool_down = ARRAY_SIZE(cool_down_vooc) - 1;
-		cool_down_target_ichg = cool_down_vooc[cool_down];
+	case ADAPTER_TYPE_WARP:
+		if (cool_down >= ARRAY_SIZE(cool_down_warp)
+				&& ARRAY_SIZE(cool_down_warp) > 1)
+			cool_down = ARRAY_SIZE(cool_down_warp) - 1;
+		cool_down_target_ichg = cool_down_warp[cool_down];
 		break;
 	case ADAPTER_TYPE_EPP:
 		if (chip->nu1619_chg_status.rx_runing_mode == RX_RUNNING_MODE_EPP_15W) {
@@ -3711,8 +3687,8 @@ static int nu1916_charge_get_cool_down_target_ichg(struct oplus_nu1619_ic *chip)
 
 static bool nu1916_charge_switch_to_low_vout(struct oplus_nu1619_ic *chip)
 {
-	if (chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_SVOOC
-			&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_SVOOC_50W)
+	if (chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_SWARP
+			&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_SWARP_50W)
 		return false;
 
 	if (oplus_chg_get_tbatt_status() == BATTERY_STATUS__COLD_TEMP
@@ -3762,11 +3738,11 @@ static void nu1619_charge_set_target_ichg(struct oplus_nu1619_ic *chip)
 
 	case BATTERY_STATUS__LITTLE_COLD_TEMP:
 		switch (chip->nu1619_chg_status.adapter_type) {
-		case ADAPTER_TYPE_SVOOC:
-		case ADAPTER_TYPE_SVOOC_50W:
+		case ADAPTER_TYPE_SWARP:
+		case ADAPTER_TYPE_SWARP_50W:
 			chip->nu1619_chg_status.wpc_chg_param.target_ichg = FASTCHG_CUR_L4;
 			break;
-		case ADAPTER_TYPE_VOOC:
+		case ADAPTER_TYPE_WARP:
 			chip->nu1619_chg_status.wpc_chg_param.target_ichg = FASTCHG_CUR_L5;
 			break;
 		case ADAPTER_TYPE_EPP:
@@ -3784,11 +3760,11 @@ static void nu1619_charge_set_target_ichg(struct oplus_nu1619_ic *chip)
 
 	case BATTERY_STATUS__COOL_TEMP:
 		switch (chip->nu1619_chg_status.adapter_type) {
-		case ADAPTER_TYPE_SVOOC:
-		case ADAPTER_TYPE_SVOOC_50W:
+		case ADAPTER_TYPE_SWARP:
+		case ADAPTER_TYPE_SWARP_50W:
 			chip->nu1619_chg_status.wpc_chg_param.target_ichg = FASTCHG_CUR_L3;
 			break;
-		case ADAPTER_TYPE_VOOC:
+		case ADAPTER_TYPE_WARP:
 			chip->nu1619_chg_status.wpc_chg_param.target_ichg = FASTCHG_CUR_L5;
 			break;
 		case ADAPTER_TYPE_EPP:
@@ -3811,13 +3787,13 @@ static void nu1619_charge_set_target_ichg(struct oplus_nu1619_ic *chip)
 	switch (chip->nu1619_chg_status.normal_temp_region) {
 	case NORMAL_TEMP_REGION1:
 		switch (chip->nu1619_chg_status.adapter_type) {
-		case ADAPTER_TYPE_SVOOC:
-		case ADAPTER_TYPE_SVOOC_50W:
+		case ADAPTER_TYPE_SWARP:
+		case ADAPTER_TYPE_SWARP_50W:
 			chip->nu1619_chg_status.wpc_chg_param.target_ichg = FASTCHG_CUR_L1;
 			if (nu1619_test_charging_status() == 4)
 				chip->nu1619_chg_status.wpc_chg_param.target_ichg = FASTCHG_CUR_L2;
 			break;
-		case ADAPTER_TYPE_VOOC:
+		case ADAPTER_TYPE_WARP:
 			chip->nu1619_chg_status.wpc_chg_param.target_ichg = FASTCHG_CUR_L5;
 			break;
 		case ADAPTER_TYPE_EPP:
@@ -3835,11 +3811,11 @@ static void nu1619_charge_set_target_ichg(struct oplus_nu1619_ic *chip)
 
 	case NORMAL_TEMP_REGION2:
 		switch (chip->nu1619_chg_status.adapter_type) {
-		case ADAPTER_TYPE_SVOOC:
-		case ADAPTER_TYPE_SVOOC_50W:
+		case ADAPTER_TYPE_SWARP:
+		case ADAPTER_TYPE_SWARP_50W:
 			chip->nu1619_chg_status.wpc_chg_param.target_ichg = FASTCHG_CUR_L4;
 			break;
-		case ADAPTER_TYPE_VOOC:
+		case ADAPTER_TYPE_WARP:
 			chip->nu1619_chg_status.wpc_chg_param.target_ichg = FASTCHG_CUR_L5;
 			break;
 		case ADAPTER_TYPE_EPP:
@@ -3855,11 +3831,11 @@ static void nu1619_charge_set_target_ichg(struct oplus_nu1619_ic *chip)
 
 	case NORMAL_TEMP_REGION3:
 		switch (chip->nu1619_chg_status.adapter_type) {
-		case ADAPTER_TYPE_SVOOC:
-		case ADAPTER_TYPE_SVOOC_50W:
+		case ADAPTER_TYPE_SWARP:
+		case ADAPTER_TYPE_SWARP_50W:
 			chip->nu1619_chg_status.wpc_chg_param.target_ichg = FASTCHG_CUR_L5;
 			break;
-		case ADAPTER_TYPE_VOOC:
+		case ADAPTER_TYPE_WARP:
 			chip->nu1619_chg_status.wpc_chg_param.target_ichg = FASTCHG_CUR_L6;
 			break;
 		case ADAPTER_TYPE_EPP:
@@ -3876,8 +3852,8 @@ static void nu1619_charge_set_target_ichg(struct oplus_nu1619_ic *chip)
 	default:
 		break;
 	}
-	if ((chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SVOOC_50W
-			|| chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SVOOC)
+	if ((chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SWARP_50W
+			|| chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SWARP)
 			&& (chip->nu1619_chg_status.work_silent_mode == true
 			|| chip->nu1619_chg_status.call_mode == true)) {
 		if (chip->nu1619_chg_status.wpc_chg_param.target_ichg > FASTCHG_CUR_L5)
@@ -3894,12 +3870,12 @@ static void nu1619_charge_set_target_ichg(struct oplus_nu1619_ic *chip)
 		target_ichg = cool_down_target_ichg;
 
 	switch (chip->nu1619_chg_status.adapter_type) {
-	case ADAPTER_TYPE_SVOOC:
-	case ADAPTER_TYPE_SVOOC_50W:
-		target_ichg_to_input_current(vbatt, target_ichg, svooc_table, i, input_current);
+	case ADAPTER_TYPE_SWARP:
+	case ADAPTER_TYPE_SWARP_50W:
+		target_ichg_to_input_current(vbatt, target_ichg, swarp_table, i, input_current);
 		break;
-	case ADAPTER_TYPE_VOOC:
-		target_ichg_to_input_current(vbatt, target_ichg, vooc_table, i, input_current);
+	case ADAPTER_TYPE_WARP:
+		target_ichg_to_input_current(vbatt, target_ichg, warp_table, i, input_current);
 		break;
 	case ADAPTER_TYPE_EPP:
 		target_ichg_to_input_current(vbatt, target_ichg, epp_table, i, input_current);
@@ -3940,7 +3916,6 @@ static void nu1619_charge_set_target_ichg(struct oplus_nu1619_ic *chip)
 			if (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_EPP)
 				chip->nu1619_chg_status.epp_current_limit = chip->nu1619_chg_status.target_iin;
 		}
-		//chg_err("<~WPC~> target_ichg[%d]\n", target_ichg);
 		if (tmp_target_iin != 0) {
 			chip->nu1619_chg_status.iout_stated_current = tmp_target_iin;
 			oplus_chg_set_input_current_without_aicl(tmp_target_iin);
@@ -3976,10 +3951,11 @@ static void nu1619_update_debug_info(struct oplus_nu1619_ic *chip)
 		chip->nu1619_chg_status.min_skewing_current
 			= min(chip->nu1619_chg_status.min_skewing_current,
 				fasctchg_current[chip->nu1619_chg_status.skewing_fastcharge_level]);
-
+#ifdef SUPPORT_OPLUS_WPC_VERIFY
 	if (chip->nu1619_chg_status.dock_verify_status == DOCK_VERIFY_FAIL
 			|| chip->nu1619_chg_status.charge_status == WPC_CHG_STATUS_VERIFY_FAIL)
 		chip->nu1619_chg_status.wls_auth_fail = 1;
+#endif
 
 	return;
 }
@@ -4012,13 +3988,13 @@ int nu1619_charge_set_max_current_by_tbatt(struct oplus_nu1619_ic *chip)
 
 	switch (now_tbatt) {
 	case BATTERY_STATUS__NORMAL:
-		chip->nu1619_chg_status.fastchg_current_limit = chip->nu1619_chg_status.wpc_chg_param.svooc_65w_iout_ma;
+		chip->nu1619_chg_status.fastchg_current_limit = chip->nu1619_chg_status.wpc_chg_param.swarp_65w_iout_ma;
 		/*chip->nu1619_chg_status.epp_current_limit = chip->nu1619_chg_status.wpc_chg_param.epp_input_ma;*/
 		chip->nu1619_chg_status.BPP_fastchg_current_ma = chip->nu1619_chg_status.wpc_chg_param.bpp_temp_normal_fastchg_ma;
 		switch (chip->nu1619_chg_status.adapter_type) {
-		case ADAPTER_TYPE_VOOC:
-			chip->nu1619_chg_status.fastchg_current_limit = chip->nu1619_chg_status.wpc_chg_param.vooc_temp_normal_fastchg_ma;
-			charging_current = chip->nu1619_chg_status.wpc_chg_param.vooc_temp_normal_fastchg_ma;
+		case ADAPTER_TYPE_WARP:
+			chip->nu1619_chg_status.fastchg_current_limit = chip->nu1619_chg_status.wpc_chg_param.warp_temp_normal_fastchg_ma;
+			charging_current = chip->nu1619_chg_status.wpc_chg_param.warp_temp_normal_fastchg_ma;
 			if (chip->nu1619_chg_status.normal_temp_region == NORMAL_TEMP_REGION3) {
 				if (chip->nu1619_chg_status.charge_status != WPC_CHG_STATUS_DEFAULT) {
 					chg_err("<~WPC~> self reset: because of normal temp region3\n");
@@ -4030,11 +4006,11 @@ int nu1619_charge_set_max_current_by_tbatt(struct oplus_nu1619_ic *chip)
 				charging_current = chip->nu1619_chg_status.wpc_chg_param.bpp_temp_warm_fastchg_ma;
 			}
 			break;
-		case ADAPTER_TYPE_SVOOC:
-			charging_current = chip->nu1619_chg_status.wpc_chg_param.svooc_65w_iout_ma;
+		case ADAPTER_TYPE_SWARP:
+			charging_current = chip->nu1619_chg_status.wpc_chg_param.swarp_65w_iout_ma;
 			break;
-		case ADAPTER_TYPE_SVOOC_50W:
-			charging_current = chip->nu1619_chg_status.wpc_chg_param.svooc_50w_iout_ma;
+		case ADAPTER_TYPE_SWARP_50W:
+			charging_current = chip->nu1619_chg_status.wpc_chg_param.swarp_50w_iout_ma;
 			break;
 		case ADAPTER_TYPE_EPP:
 			charging_current = chip->nu1619_chg_status.wpc_chg_param.epp_temp_normal_fastchg_ma;
@@ -4047,7 +4023,7 @@ int nu1619_charge_set_max_current_by_tbatt(struct oplus_nu1619_ic *chip)
 		}
 		break;
 	case BATTERY_STATUS__COLD_TEMP:
-		if (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_VOOC) {
+		if (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_WARP) {
 			chg_err("<~WPC~> self reset: because of cold temp\n");
 			nu1619_self_reset(chip, true);
 		}
@@ -4060,14 +4036,14 @@ int nu1619_charge_set_max_current_by_tbatt(struct oplus_nu1619_ic *chip)
 		/*chip->nu1619_chg_status.epp_current_limit = chip->nu1619_chg_status.wpc_chg_param.epp_input_ma;*/
 		chip->nu1619_chg_status.BPP_fastchg_current_ma = chip->nu1619_chg_status.wpc_chg_param.bpp_temp_little_cold_fastchg_ma;
 		switch (chip->nu1619_chg_status.adapter_type) {
-		case ADAPTER_TYPE_VOOC:
-			chip->nu1619_chg_status.fastchg_current_limit = chip->nu1619_chg_status.wpc_chg_param.vooc_temp_little_cold_fastchg_ma;
-			charging_current = chip->nu1619_chg_status.wpc_chg_param.vooc_temp_little_cold_fastchg_ma;
+		case ADAPTER_TYPE_WARP:
+			chip->nu1619_chg_status.fastchg_current_limit = chip->nu1619_chg_status.wpc_chg_param.warp_temp_little_cold_fastchg_ma;
+			charging_current = chip->nu1619_chg_status.wpc_chg_param.warp_temp_little_cold_fastchg_ma;
 			break;
-		case ADAPTER_TYPE_SVOOC:
-		case ADAPTER_TYPE_SVOOC_50W:
-			chip->nu1619_chg_status.fastchg_current_limit = chip->nu1619_chg_status.wpc_chg_param.svooc_temp_little_cold_fastchg_ma;
-			charging_current = chip->nu1619_chg_status.wpc_chg_param.svooc_temp_little_cold_fastchg_ma;
+		case ADAPTER_TYPE_SWARP:
+		case ADAPTER_TYPE_SWARP_50W:
+			chip->nu1619_chg_status.fastchg_current_limit = chip->nu1619_chg_status.wpc_chg_param.swarp_temp_little_cold_fastchg_ma;
+			charging_current = chip->nu1619_chg_status.wpc_chg_param.swarp_temp_little_cold_fastchg_ma;
 			break;
 		case ADAPTER_TYPE_EPP:
 			charging_current = chip->nu1619_chg_status.wpc_chg_param.epp_temp_little_cold_fastchg_ma;
@@ -4083,14 +4059,14 @@ int nu1619_charge_set_max_current_by_tbatt(struct oplus_nu1619_ic *chip)
 		/*chip->nu1619_chg_status.epp_current_limit = chip->nu1619_chg_status.wpc_chg_param.epp_input_ma;*/
 		chip->nu1619_chg_status.BPP_fastchg_current_ma = chip->nu1619_chg_status.wpc_chg_param.bpp_temp_cool_fastchg_ma;
 		switch (chip->nu1619_chg_status.adapter_type) {
-		case ADAPTER_TYPE_VOOC:
-			chip->nu1619_chg_status.fastchg_current_limit = chip->nu1619_chg_status.wpc_chg_param.vooc_temp_cool_fastchg_ma;
-			charging_current = chip->nu1619_chg_status.wpc_chg_param.vooc_temp_cool_fastchg_ma;
+		case ADAPTER_TYPE_WARP:
+			chip->nu1619_chg_status.fastchg_current_limit = chip->nu1619_chg_status.wpc_chg_param.warp_temp_cool_fastchg_ma;
+			charging_current = chip->nu1619_chg_status.wpc_chg_param.warp_temp_cool_fastchg_ma;
 			break;
-		case ADAPTER_TYPE_SVOOC:
-		case ADAPTER_TYPE_SVOOC_50W:
-			chip->nu1619_chg_status.fastchg_current_limit = chip->nu1619_chg_status.wpc_chg_param.svooc_temp_cool_fastchg_ma;
-			charging_current = chip->nu1619_chg_status.wpc_chg_param.svooc_temp_cool_fastchg_ma;
+		case ADAPTER_TYPE_SWARP:
+		case ADAPTER_TYPE_SWARP_50W:
+			chip->nu1619_chg_status.fastchg_current_limit = chip->nu1619_chg_status.wpc_chg_param.swarp_temp_cool_fastchg_ma;
+			charging_current = chip->nu1619_chg_status.wpc_chg_param.swarp_temp_cool_fastchg_ma;
 			break;
 		case ADAPTER_TYPE_EPP:
 			charging_current = chip->nu1619_chg_status.wpc_chg_param.epp_temp_cool_fastchg_ma;
@@ -4106,17 +4082,17 @@ int nu1619_charge_set_max_current_by_tbatt(struct oplus_nu1619_ic *chip)
 		/*chip->nu1619_chg_status.epp_current_limit = chip->nu1619_chg_status.wpc_chg_param.epp_input_ma;*/
 		chip->nu1619_chg_status.BPP_fastchg_current_ma = chip->nu1619_chg_status.wpc_chg_param.bpp_temp_little_cool_fastchg_ma;
 		switch (chip->nu1619_chg_status.adapter_type) {
-		case ADAPTER_TYPE_VOOC:
-			chip->nu1619_chg_status.fastchg_current_limit = chip->nu1619_chg_status.wpc_chg_param.vooc_temp_little_cool_fastchg_ma;
-			charging_current = chip->nu1619_chg_status.wpc_chg_param.vooc_temp_little_cool_fastchg_ma;
+		case ADAPTER_TYPE_WARP:
+			chip->nu1619_chg_status.fastchg_current_limit = chip->nu1619_chg_status.wpc_chg_param.warp_temp_little_cool_fastchg_ma;
+			charging_current = chip->nu1619_chg_status.wpc_chg_param.warp_temp_little_cool_fastchg_ma;
 			break;
-		case ADAPTER_TYPE_SVOOC:
-			chip->nu1619_chg_status.fastchg_current_limit = chip->nu1619_chg_status.wpc_chg_param.svooc_65w_iout_ma;
-			charging_current = chip->nu1619_chg_status.wpc_chg_param.svooc_temp_little_cool_fastchg_ma;
+		case ADAPTER_TYPE_SWARP:
+			chip->nu1619_chg_status.fastchg_current_limit = chip->nu1619_chg_status.wpc_chg_param.swarp_65w_iout_ma;
+			charging_current = chip->nu1619_chg_status.wpc_chg_param.swarp_temp_little_cool_fastchg_ma;
 			break;
-		case ADAPTER_TYPE_SVOOC_50W:
-			chip->nu1619_chg_status.fastchg_current_limit = chip->nu1619_chg_status.wpc_chg_param.svooc_50w_iout_ma;
-			charging_current = chip->nu1619_chg_status.wpc_chg_param.svooc_temp_little_cool_fastchg_ma;
+		case ADAPTER_TYPE_SWARP_50W:
+			chip->nu1619_chg_status.fastchg_current_limit = chip->nu1619_chg_status.wpc_chg_param.swarp_50w_iout_ma;
+			charging_current = chip->nu1619_chg_status.wpc_chg_param.swarp_temp_little_cool_fastchg_ma;
 			break;
 		case ADAPTER_TYPE_EPP:
 			charging_current = chip->nu1619_chg_status.wpc_chg_param.epp_temp_little_cool_fastchg_ma;
@@ -4129,7 +4105,7 @@ int nu1619_charge_set_max_current_by_tbatt(struct oplus_nu1619_ic *chip)
 		}
 		break;
 	case BATTERY_STATUS__WARM_TEMP:
-		if (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_VOOC) {
+		if (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_WARP) {
 			chg_err("<~WPC~> self reset: because of warm temp\n");
 			nu1619_self_reset(chip, true);
 		}
@@ -4159,9 +4135,9 @@ int nu1619_charge_set_max_current_by_tbatt(struct oplus_nu1619_ic *chip)
 			|| pre_tbatt == BATTERY_STATUS__LOW_TEMP
 			|| pre_tbatt == BATTERY_STATUS__HIGH_TEMP
 			|| (pre_tbatt == BATTERY_STATUS__COLD_TEMP
-				&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_SVOOC_50W
-				&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_SVOOC
-				&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_VOOC
+				&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_SWARP_50W
+				&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_SWARP
+				&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_WARP
 				&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_EPP)) {
 			if ((g_oplus_chip->temperature > g_oplus_chip->limits.little_cold_bat_decidegc)
 				&& (g_oplus_chip->temperature < g_oplus_chip->limits.warm_bat_decidegc)) {
@@ -4171,9 +4147,9 @@ int nu1619_charge_set_max_current_by_tbatt(struct oplus_nu1619_ic *chip)
 		}
 		pre_tbatt = now_tbatt;
 	}
-	if (chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_SVOOC_50W
-			&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_SVOOC
-			&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_VOOC
+	if (chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_SWARP_50W
+			&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_SWARP
+			&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_WARP
 			&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_EPP) {
 		if (chip->nu1619_chg_status.normal_temp_region == NORMAL_TEMP_REGION2
 				&& pre_normal_region == NORMAL_TEMP_REGION3) {
@@ -4183,9 +4159,9 @@ int nu1619_charge_set_max_current_by_tbatt(struct oplus_nu1619_ic *chip)
 		pre_normal_region = chip->nu1619_chg_status.normal_temp_region;
 	}
 
-	if (chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_VOOC
-			&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_SVOOC
-			&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_SVOOC_50W
+	if (chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_WARP
+			&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_SWARP
+			&& chip->nu1619_chg_status.adapter_type != ADAPTER_TYPE_SWARP_50W
 			&& chip->nu1619_chg_status.charge_current != charging_current)
 		nu1619_set_rx_charge_current(chip, charging_current);
 	return 0;
@@ -4194,8 +4170,6 @@ int nu1619_charge_set_max_current_by_tbatt(struct oplus_nu1619_ic *chip)
 static int oplus_wpc_set_input_current(struct oplus_nu1619_ic *chip)
 {
 	int current_limit = 0;
-	//int input_current_threshold = 0;
-	//int now_tbatt = oplus_chg_get_tbatt_status();
 
 	if (!chip) {
 		chg_err("oplus_nu1619_ic is not ready\n");
@@ -4203,29 +4177,13 @@ static int oplus_wpc_set_input_current(struct oplus_nu1619_ic *chip)
 	}
 
 	switch (chip->nu1619_chg_status.adapter_type) {
-	case ADAPTER_TYPE_VOOC:
-		//current_limit = chip->nu1619_chg_status.wpc_chg_param.vooc_input_ma;
+	case ADAPTER_TYPE_WARP:
 		break;
-	case ADAPTER_TYPE_SVOOC:
-		//current_limit = chip->nu1619_chg_status.wpc_chg_param.svooc_input_ma;
+	case ADAPTER_TYPE_SWARP:
 		break;
-	case ADAPTER_TYPE_SVOOC_50W:
-		//current_limit = chip->nu1619_chg_status.wpc_chg_param.svooc_input_ma;
+	case ADAPTER_TYPE_SWARP_50W:
 		break;
 	case ADAPTER_TYPE_EPP:
-		/*if (now_tbatt == BATTERY_STATUS__WARM_TEMP || now_tbatt == BATTERY_STATUS__COLD_TEMP) {
-			input_current_threshold = chip->nu1619_chg_status.wpc_chg_param.epp_temp_warm_input_ma;
-			if (chip->nu1619_chg_status.epp_current_limit < input_current_threshold) {
-				chip->nu1619_chg_status.epp_current_limit +=
-					chip->nu1619_chg_status.wpc_chg_param.epp_input_step_ma;
-				chg_err("<~WPC~>EPP increase charge current to %dmA\n", chip->nu1619_chg_status.epp_current_limit);
-			} else {
-				chip->nu1619_chg_status.epp_current_limit = input_current_threshold;
-			}
-			current_limit = chip->nu1619_chg_status.epp_current_limit;
-		} else {
-			current_limit = 0;
-		}*/
 		if (nu1619_get_special_ID(chip) != 0) {
 			chip->nu1619_chg_status.epp_current_limit = WPC_CHARGE_CURRENT_EPP_SPEC;
 			current_limit = WPC_CHARGE_CURRENT_EPP_SPEC;
@@ -4235,28 +4193,6 @@ static int oplus_wpc_set_input_current(struct oplus_nu1619_ic *chip)
 		nu1619_charge_set_target_ichg(chip);
 		chip->nu1619_chg_status.BPP_current_limit = chip->nu1619_chg_status.iout_stated_current;
 		current_limit = 0;
-		/*if (chip->nu1619_chg_status.BPP_current_step_cnt > 0) {
-			chip->nu1619_chg_status.BPP_current_step_cnt--;
-			if (chip->nu1619_chg_status.BPP_current_step_cnt == 0) {
-				if (chip->nu1619_chg_status.BPP_current_limit < 500) {
-					chg_err("<~WPC~> set BPP current limit 500ma\n");
-					chip->nu1619_chg_status.BPP_current_limit = 500;
-					mp2650_set_vindpm_vol(4900);
-					chip->nu1619_chg_status.BPP_current_step_cnt = BPP_CURRENT_INCREASE_TIME;
-				} else if (chip->nu1619_chg_status.BPP_current_limit < 700) {
-					chg_err("<~WPC~> set BPP current limit 700ma\n");
-					chip->nu1619_chg_status.BPP_current_limit = 700;
-					chip->nu1619_chg_status.BPP_current_step_cnt = BPP_CURRENT_INCREASE_TIME;
-				} else if (chip->nu1619_chg_status.BPP_current_limit < chip->nu1619_chg_status.wpc_chg_param.bpp_input_ma) {
-					chg_err("<~WPC~> set BPP current limit 750ma\n");
-					chip->nu1619_chg_status.BPP_current_limit = chip->nu1619_chg_status.wpc_chg_param.bpp_input_ma;
-				}
-			}
-		}
-		if (chip->nu1619_chg_status.BPP_current_limit < 200)
-			chip->nu1619_chg_status.BPP_current_limit = 200;
-		current_limit = chip->nu1619_chg_status.BPP_current_limit;*/
-
 		break;
 	}
 	if (g_oplus_chip->batt_full == true && g_oplus_chip->in_rechging == false) {
@@ -4288,13 +4224,13 @@ int nu1619_charge_set_max_current_by_adapter_power(struct oplus_nu1619_ic *chip)
 		}
 		break;
 	case ADAPTER_POWER_50W:
-		if(chip->nu1619_chg_status.fastchg_current_limit > chip->nu1619_chg_status.wpc_chg_param.svooc_50w_iout_ma)
-			chip->nu1619_chg_status.fastchg_current_limit = chip->nu1619_chg_status.wpc_chg_param.svooc_50w_iout_ma;
+		if(chip->nu1619_chg_status.fastchg_current_limit > chip->nu1619_chg_status.wpc_chg_param.swarp_50w_iout_ma)
+			chip->nu1619_chg_status.fastchg_current_limit = chip->nu1619_chg_status.wpc_chg_param.swarp_50w_iout_ma;
 		break;
 	case ADAPTER_POWER_30W:
 	case ADAPTER_POWER_20W:
-		if(chip->nu1619_chg_status.fastchg_current_limit > chip->nu1619_chg_status.wpc_chg_param.vooc_temp_normal_fastchg_ma)
-			chip->nu1619_chg_status.fastchg_current_limit = chip->nu1619_chg_status.wpc_chg_param.vooc_temp_normal_fastchg_ma;
+		if(chip->nu1619_chg_status.fastchg_current_limit > chip->nu1619_chg_status.wpc_chg_param.warp_temp_normal_fastchg_ma)
+			chip->nu1619_chg_status.fastchg_current_limit = chip->nu1619_chg_status.wpc_chg_param.warp_temp_normal_fastchg_ma;
 		break;
 	default:
 		break;
@@ -4377,15 +4313,15 @@ static int nu1619_charge_status_process(struct oplus_nu1619_ic *chip)
 			break;
 		}
 #ifdef FASTCHG_TEST_BY_TIME
-		if (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SVOOC) {
+		if (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SWARP) {
 			chg_err("<~WPC~>[-TEST-] Go to Fastchg test!\n");
 			chip->nu1619_chg_status.fastchg_current_limit = 2000;
 			chip->nu1619_chg_status.charge_status = WPC_CHG_STATUS_READY_FOR_FASTCHG;
 		}
 #else
 		/*deviation check*/
-		if ((chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_VOOC
-				|| chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SVOOC)
+		if ((chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_WARP
+				|| chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SWARP)
 				&& !chip->nu1619_chg_status.deviation_check_done) {
 			if (g_oplus_chip->batt_volt_max > 4100) {
 				freq_thr = chip->nu1619_chg_status.freq_threshold + 2;
@@ -4409,8 +4345,8 @@ static int nu1619_charge_status_process(struct oplus_nu1619_ic *chip)
 				chg_err("<~WPC~> phone location is deviation, work_freq=%d, freq_thr=%d\n", work_freq, freq_thr);
 			}
 		}
-		if ((chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_VOOC)
-			|| (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SVOOC)) {
+		if ((chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_WARP)
+			|| (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SWARP)) {
 			if (chip->nu1619_chg_status.fastchg_allow == true) {
 				chip->nu1619_chg_status.charge_status = WPC_CHG_STATUS_READY_FOR_FASTCHG;
 				break;
@@ -4537,8 +4473,8 @@ static int nu1619_charge_status_process(struct oplus_nu1619_ic *chip)
 		if (chip->nu1619_chg_status.ftm_mode) {
 			chip->nu1619_chg_status.charge_status = WPC_CHG_STATUS_READY_FOR_FTM;
 		} else {
-			if (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_VOOC
-				|| (g_oplus_chip->wpc_no_chargerpump && chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SVOOC)
+			if (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_WARP
+				|| (g_oplus_chip->wpc_no_chargerpump && chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SWARP)
 				|| g_oplus_chip->soc >= 90
 				|| g_oplus_chip->temperature < g_oplus_chip->limits.little_cool_bat_decidegc) {
 				chip->nu1619_chg_status.charge_status = WPC_CHG_STATUS_CHARGER_FASTCHG_INIT;
@@ -4578,7 +4514,7 @@ static int nu1619_charge_status_process(struct oplus_nu1619_ic *chip)
 		cep_nonzero_cnt = 0;
 		chip->nu1619_chg_status.wpc_ffc_charge = false;
 		chip->nu1619_chg_status.has_reach_max_temperature = false;
-		if (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_VOOC)
+		if (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_WARP)
 			nu1619_set_rx_charge_current(chip, NU1619_FASTCHG_CURR_MIDDLE);
 		else
 			nu1619_set_rx_charge_current(chip, NU1619_FASTCHG_CURR_MAX);
@@ -4610,7 +4546,7 @@ static int nu1619_charge_status_process(struct oplus_nu1619_ic *chip)
 			if ((chip->nu1619_chg_status.vout >= 19000)
 				|| (chip->nu1619_chg_status.vout >= (g_oplus_chip->batt_volt * 4 + 600))) {
 				chg_err("<~WPC~> Vout >= 19V or Vout >= 2*Vbatt, turn to MP2762!\n");
-				chip->nu1619_chg_status.adapter_type = ADAPTER_TYPE_VOOC;
+				chip->nu1619_chg_status.adapter_type = ADAPTER_TYPE_WARP;
 				chip->nu1619_chg_status.charge_status = WPC_CHG_STATUS_CHARGER_FASTCHG_INIT;
 				break;
 			} else {
@@ -4915,13 +4851,13 @@ static int nu1619_charge_status_process(struct oplus_nu1619_ic *chip)
 				chip->nu1619_chg_status.rx_power = -1;
 				chip->nu1619_chg_status.send_message = P9221_CMD_GET_RXTX_POWER;
 				chip->nu1619_chg_status.send_msg_cnt = 10;
-				chg_err("<~WPC~> airvooc set rxtx power cmd\n");
+				chg_err("<~WPC~> airwarp set rxtx power cmd\n");
 				nu1619_set_rxtx_power_cmd(chip);
 			}
 		}
 
-		if (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SVOOC
-				|| chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SVOOC_50W) {
+		if (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SWARP
+				|| chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SWARP_50W) {
 			if (nu1916_charge_switch_to_low_vout(chip) == true) {
 				if (chip->nu1619_chg_status.charge_voltage != WPC_CHARGE_VOLTAGE_FASTCHG_MIN) {
 					nu1619_set_rx_charge_voltage(chip, WPC_CHARGE_VOLTAGE_FASTCHG_MIN);
@@ -5110,16 +5046,6 @@ static void nu1619_idt_dischg_status(struct oplus_nu1619_ic *chip)
 		default:
 			break;
 		}
-/*
-		if ((P922X_REG_RTX_ERR_TX_CEPTIMEOUT & regdata[1]) == 0) {
-			//chip->nu1619_chg_status.wpc_dischg_status = WPC_DISCHG_STATUS_OFF;
-			//g_oplus_chip->otg_switch = 0;
-			mp2650_otg_disable();
-			mp2650_otg_wait_vbus_decline();
-			oplus_set_wrx_otg_en_value(0);
-			oplus_set_wrx_en_value(0);
-		}
-*/
 		if (P922X_RTX_TRANSFER & regdata[0]) {
 			chip->nu1619_chg_status.tx_online = true;
 			pre_tx_online = true;
@@ -5305,8 +5231,8 @@ retry:
 							chip->nu1619_chg_status.adapter_type, chip->nu1619_chg_status.dock_version);
 						nu1619_config_fan_pwm_pulse_value(chip);
 						if (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_PD_65W)
-							chip->nu1619_chg_status.adapter_type = ADAPTER_TYPE_SVOOC;
-						if (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SVOOC) {
+							chip->nu1619_chg_status.adapter_type = ADAPTER_TYPE_SWARP;
+						if (chip->nu1619_chg_status.adapter_type == ADAPTER_TYPE_SWARP) {
 							wpc_battery_update();
 						}
 						nu1619_set_tx_Q_value(chip);
@@ -5638,7 +5564,6 @@ static void nu1619_idt_connect_int_func(struct work_struct *work)
 
 			oplus_chg_restart_update_work();
 #ifdef OPLUS_FEATURE_CHG_BASIC
-/* Ping.Zhang@BSP.TP.Init, 2020/03/02, Add for notify touchpanel status */
 			switch_wireless_charger_state(1);
 #endif
 			pm_relax(chip->dev);
@@ -5709,7 +5634,6 @@ static void nu1619_idt_connect_int_func(struct work_struct *work)
 #endif
 			oplus_chg_restart_update_work();
 #ifdef OPLUS_FEATURE_CHG_BASIC
-/* Ping.Zhang@BSP.TP.Init, 2020/03/02, Add for notify touchpanel status */
 			switch_wireless_charger_state(0);
 #endif
 		}
@@ -7438,7 +7362,14 @@ static void oplus_wpc_update_chg_debug_info(struct oplus_nu1619_ic *chip)
 	chg_debug_info.work_silent_mode = chg_status->work_silent_mode;
 	chg_debug_info.fastchg_ing = chg_status->fastchg_ing;
 	chg_debug_info.break_count = chg_status->break_count;
+	chg_debug_info.highest_temp = chg_status->highest_temp;
+	chg_debug_info.max_iout = chg_status->max_iout;
+	chg_debug_info.min_cool_down = chg_status->min_cool_down;
+	chg_debug_info.min_skewing_current = chg_status->min_skewing_current;
+	chg_debug_info.wls_auth_fail = chg_status->wls_auth_fail;
 }
+
+
 
 static void wlchg_reset_variables(struct oplus_nu1619_ic *chip)
 {
@@ -8316,8 +8247,8 @@ CCC:
 		return false;
 	/************exit dtm************/
 
-	chg_err(" error_count=%d, pass_count=%d, (sizeof(fw_rx_lenth))=%ld\n",
-			j, pass_count, (sizeof(chip->fw_rx_lenth)));
+	chg_err(" error_count=%d, pass_count=%d, (sizeof(nu1619_fw_data_rx))=%ld\n",
+			j, pass_count, (sizeof(nu1619_fw_data_rx)));
 
 	chg_err(" fw_data version=0x%x, 0x%x, 0x%x, 0x%x\n",
 			0xff & (~fw_data[fw_size - 4]), 0xff & (~fw_data[fw_size - 3]),
@@ -9190,8 +9121,8 @@ static int nu1619_wireless_get_prop(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_REAL_TYPE:
 		switch (nu1619_chip->nu1619_chg_status.adapter_type) {
-		case ADAPTER_TYPE_VOOC:
-		case ADAPTER_TYPE_SVOOC:
+		case ADAPTER_TYPE_WARP:
+		case ADAPTER_TYPE_SWARP:
 			val->intval = POWER_SUPPLY_TYPE_USB_DCP;
 			break;
 		case ADAPTER_TYPE_USB:
@@ -9415,8 +9346,8 @@ static int nu1619_wpc_get_real_type(void)
 	}
 
 	switch (chip->nu1619_chg_status.adapter_type) {
-	case ADAPTER_TYPE_VOOC:
-	case ADAPTER_TYPE_SVOOC:
+	case ADAPTER_TYPE_WARP:
+	case ADAPTER_TYPE_SWARP:
 		real_type = POWER_SUPPLY_TYPE_USB_DCP;
 		break;
 	case ADAPTER_TYPE_USB:

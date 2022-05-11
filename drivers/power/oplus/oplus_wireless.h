@@ -50,33 +50,29 @@
 #define TEMPERATURE_STATUS_FFC_2							2
 #define TEMPERATURE_STATUS_OTHER							3
 
-#define TEMPERATURE_STATUS_CHANGE_TIMEOUT					10		//about 10s
+#define TEMPERATURE_STATUS_CHANGE_TIMEOUT					10
 #define WPC_CHARGE_CURRENT_LIMIT_300MA						300
 #define WPC_CHARGE_CURRENT_LIMIT_200MA						200
-#define WPC_CHARGE_CURRENT_ZERO								0		//0mA
+#define WPC_CHARGE_CURRENT_ZERO								0
 #define WPC_CHARGE_CURRENT_200MA							200
-#ifdef OPLUS_CUSTOM_OP_DEF
-#define WPC_CHARGE_CURRENT_DEFAULT							250		//250mA
-#else
-#define WPC_CHARGE_CURRENT_DEFAULT							500		//500mA
-#endif
+#define WPC_CHARGE_CURRENT_DEFAULT							500
 #define WPC_CHARGE_CURRENT_BPP_INIT							150
 #define WPC_CHARGE_CURRENT_BPP								1000
 #define WPC_CHARGE_CURRENT_EPP_INIT							200
 #define WPC_CHARGE_CURRENT_EPP								800
 #define WPC_CHARGE_CURRENT_EPP_SPEC							300
 #define WPC_CHARGE_CURRENT_FASTCHG_INT                      300
-#define WPC_CHARGE_CURRENT_FASTCHG_END						700		//300mA
-#define WPC_CHARGE_CURRENT_FASTCHG_MID						800		//800mA
-#define WPC_CHARGE_CURRENT_FASTCHG							1200	//1500mA
-#define WPC_CHARGE_CURRENT_CHANGE_STEP_200MA				200		//200mA
-#define WPC_CHARGE_CURRENT_CHANGE_STEP_50MA					50		//50mA
-#define WPC_CHARGE_CURRENT_FFC_TO_CV						1000	//1000mA
+#define WPC_CHARGE_CURRENT_FASTCHG_END						700
+#define WPC_CHARGE_CURRENT_FASTCHG_MID						800
+#define WPC_CHARGE_CURRENT_FASTCHG							1200
+#define WPC_CHARGE_CURRENT_CHANGE_STEP_200MA				200
+#define WPC_CHARGE_CURRENT_CHANGE_STEP_50MA					50
+#define WPC_CHARGE_CURRENT_FFC_TO_CV						1000
 #define WPC_CHARGE_CURRENT_CHGPUMP_TO_CHARGER				1000
 
 #define WPC_CHARGE_CURRENT_OFFSET							50
 
-#define WPC_CHARGE_VOLTAGE_DEFAULT							5000    //5V
+#define WPC_CHARGE_VOLTAGE_DEFAULT							5000
 
 #define WPC_CHARGE_VOLTAGE_FASTCHG_INIT						12000
 #define WPC_CHARGE_VOLTAGE_CHGPUMP_TO_CHARGER				12000
@@ -155,12 +151,12 @@
 #define CHARGEPUMP_DETECT_CNT								40
 
 #define ADAPTER_TYPE_UNKNOW									0
-#define ADAPTER_TYPE_VOOC									1
-#define ADAPTER_TYPE_SVOOC									2
+#define ADAPTER_TYPE_WARP									1
+#define ADAPTER_TYPE_SWARP									2
 #define ADAPTER_TYPE_USB									3
 #define ADAPTER_TYPE_NORMAL_CHARGE							4
 #define ADAPTER_TYPE_EPP									5
-#define ADAPTER_TYPE_SVOOC_50W								6
+#define ADAPTER_TYPE_SWARP_50W								6
 #define ADAPTER_TYPE_PD_65W								7
 
 #define WPC_CHARGE_TYPE_DEFAULT								0
@@ -320,36 +316,36 @@ struct wpc_chg_param_t{
 	int epp_15w_input_ma;
 	int epp_temp_warm_input_ma;
 	int epp_input_step_ma;
-	int vooc_input_ma;
-	int vooc_iout_ma;
-	int svooc_input_ma;
-	int svooc_65w_iout_ma;
-	int svooc_50w_iout_ma;
-	int bpp_temp_cold_fastchg_ma;						// -2
-	int vooc_temp_little_cold_fastchg_ma;		// 0
-	int svooc_temp_little_cold_iout_ma;
-	int svooc_temp_little_cold_fastchg_ma;
+	int warp_input_ma;
+	int warp_iout_ma;
+	int swarp_input_ma;
+	int swarp_65w_iout_ma;
+	int swarp_50w_iout_ma;
+	int bpp_temp_cold_fastchg_ma;
+	int warp_temp_little_cold_fastchg_ma;
+	int swarp_temp_little_cold_iout_ma;
+	int swarp_temp_little_cold_fastchg_ma;
 	int bpp_temp_little_cold_fastchg_ma;
 	int epp_temp_little_cold_fastchg_ma;
 	int epp_15w_temp_little_cold_fastchg_ma;
-	int vooc_temp_cool_fastchg_ma;				// 5
-	int svooc_temp_cool_iout_ma;
-	int svooc_temp_cool_fastchg_ma;
+	int warp_temp_cool_fastchg_ma;
+	int swarp_temp_cool_iout_ma;
+	int swarp_temp_cool_fastchg_ma;
 	int bpp_temp_cool_fastchg_ma;
 	int epp_temp_cool_fastchg_ma;
 	int epp_15w_temp_cool_fastchg_ma;
-	int vooc_temp_little_cool_fastchg_ma;		// 12
-	int svooc_temp_little_cool_fastchg_ma;
+	int warp_temp_little_cool_fastchg_ma;
+	int swarp_temp_little_cool_fastchg_ma;
 	int bpp_temp_little_cool_fastchg_ma;
 	int epp_temp_little_cool_fastchg_ma;
 	int epp_15w_temp_little_cool_fastchg_ma;
-	int vooc_temp_normal_fastchg_ma;		// 16
-	int svooc_temp_normal_fastchg_ma;
+	int warp_temp_normal_fastchg_ma;
+	int swarp_temp_normal_fastchg_ma;
 	int bpp_temp_normal_fastchg_ma;
 	int epp_temp_normal_fastchg_ma;
 	int epp_15w_temp_normal_fastchg_ma;
-	int vooc_temp_warm_fastchg_ma;		// 45
-	int svooc_temp_warm_fastchg_ma;
+	int warp_temp_warm_fastchg_ma;
+	int swarp_temp_warm_fastchg_ma;
 	int bpp_temp_warm_fastchg_ma;
 	int epp_temp_warm_fastchg_ma;
 	int epp_15w_temp_warm_fastchg_ma;

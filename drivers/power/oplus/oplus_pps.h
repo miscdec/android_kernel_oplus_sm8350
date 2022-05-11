@@ -1,8 +1,15 @@
-// SPDX-License-Identifier: GPL-2.0-only
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
+/**********************************************************************************
+* Copyright (c)  2008-2020  Guangdong OPLUS Mobile Comm Corp., Ltd
 
+* Description: Charger IC management module for charger system framework.
+*              Manage all charger IC and define abstarct function flow.
+* Version    : 1.0
+* Date       : 2020-06-29
+* Author     : zhouhaikang@oplus.com
+* ------------------------------ Revision History: --------------------------------
+* <version>           <date>                <author>                       <desc>
+* Revision 1.0       2020-06-29        fanhui@PhoneSW.BSP            Created for new architecture
+***********************************************************************************/
 #include <linux/time.h>
 #include <linux/list.h>
 #ifndef CONFIG_OPLUS_CHARGER_MTK
@@ -12,9 +19,9 @@
 #include <linux/random.h>
 #include <linux/device.h>
 #include <linux/types.h>
-#define OPLUS_CHG_UPDATE_PPS_DELAY	round_jiffies_relative(msecs_to_jiffies(500))
-#define PD_PPS_STATUS_VOLT(pps_status)			(((pps_status) >> 0) & 0xFFFF)
-#define PD_PPS_STATUS_CUR(pps_status)			(((pps_status) >> 16) & 0xFF)
+#define OPLUS_CHG_UPDATE_PPS_DELAY            round_jiffies_relative(msecs_to_jiffies(500))
+#define PD_PPS_STATUS_VOLT(pps_status)        (((pps_status) >> 0) & 0xFFFF)
+#define PD_PPS_STATUS_CUR(pps_status)         (((pps_status) >> 16) & 0xFF)
 
 #define OPLUS_PPS_10V_STATUS_1               12
 #define OPLUS_PPS_10V_STATUS_2               6
@@ -25,14 +32,22 @@
 
 #define OVER_CURRENT_VALUE                   14000
 #define FASTCHG_TIMEOUT                      7200
-#define BAT_FULL_1TIME_TH_PPS				4510
+#define BAT_FULL_1TIME_THD                   4510
+#define BAT_FULL_2TIME_THD                   4430
 
 #define R1_LIMIT                             50
 #define R2_LIMIT                             20
 
+#define TEMP_DELTAT                          10
+
 #define CABLE_CURRENT_LIMIT                  1000
 
-#define BATT_SYS_MAX_PPS				8
+#define BATT_SYS_MAX                         8
+
+#define update_vcp_time                      1
+#define update_pdo_time                      5
+#define update_fastchg_time                  1
+#define update_temp_time                     3
 
 enum {
 	PPS_BAT_TEMP_NATURAL = 0,
@@ -67,7 +82,7 @@ enum {
 	OPLUS_10V_STATUS = 0,
 	OPLUS_125W_STATUS1,
 	OPLUS_125W_STATUS2,
-	OPLUS_10V_30W_STATUS,         //第三方适配器，30w
+	OPLUS_10V_30W_STATUS,
 };
 enum {
 	PPS_NOT_SUPPORT = 0,
@@ -103,7 +118,7 @@ struct batt_curve {
 };
 
 struct batt_curves {
-	struct batt_curve batt_curves[BATT_SYS_MAX_PPS];
+	struct batt_curve batt_curves[BATT_SYS_MAX];
 	int batt_curve_num;
 };
 
@@ -129,7 +144,6 @@ struct oplus_pps_chip {
 	int                         ap_batt_soc;
 	int                         ap_batt_temperature;
 
-	bool                        need_update_volt_cur;
 	int                         target_charger_volt;
 	int                         target_charger_current;
 	int                         ask_charger_volt;
@@ -138,6 +152,10 @@ struct oplus_pps_chip {
 	int                         ask_charger_current_last;
 	int                         pps_chging;
 	bool                        fg_batt_full;
+	bool                        set_pdo_flag;
+	bool                        set_vcp_flag;
+	bool                        set_fastchg_flag;
+	bool                        set_temp_flag;
 
 	char                        curr_over_count;
 	bool                        fg_current_over;
@@ -196,16 +214,17 @@ struct oplus_pps_chip {
 
 	char                        pps_disconnect_count;
 	bool                        pps_disconnect;
+	int                         pps_disconnect_volt;
 
 	bool                        need_change_curve;
+	int                         pps_hard_reset_count;
 	struct list_head		temp_list;
-	//struct oplus_chg_chip 		*chip;
-	struct timespec 		vcp_time;		//阻抗检测time
-	struct timespec 		ts_last;		//5s看门狗，保证5s和适配器通讯一次
-	struct timespec 		fastchg_time;		//充电曲线time
-	struct timespec 		temp_time;		//温控保护，每1s读一次温度
+	struct timespec 		pdo_timer;
+	struct timespec 		vcp_timer;
+	struct timespec 		fastchg_timer;
+	struct timespec 		temp_timer;
 	struct power_supply		*pps_usb_psy;
-	struct notifier_block		pps_psy_nb;
+	struct notifier_block	pps_psy_nb;
 	struct usbpd			*pd;
 #ifndef CONFIG_OPLUS_CHARGER_MTK
 	struct usbpd_svid_handler	svid_handler;
@@ -213,7 +232,7 @@ struct oplus_pps_chip {
 	struct completion		is_ready;
 	struct mutex			status_mutex;
 
-	struct oplus_pps_mcu_operations *ops;
+	struct oplus_pps_operations *ops;
 	struct delayed_work		pps_stop_work;
 	struct delayed_work		update_pps_work;
 	struct delayed_work		register_pps;
@@ -223,8 +242,6 @@ struct oplus_pps_chip {
 	struct batt_curves_soc		batt_curves_soc[BATT_CURVE_SOC_MAX];
 	struct batt_curves		batt_curves;
 	int 				batt_curve_index;
-	int					temperature;
-	int					soc;
 	int					current_batt_curve;
 	int					current_batt_temp;
 	int					current_cool_down;
@@ -232,7 +249,7 @@ struct oplus_pps_chip {
 	int					target_charger_current_pre;
 };
 
-struct oplus_pps_mcu_operations {
+struct oplus_pps_operations {
 	int (*get_input_volt)(void);
 	int (*get_vbat0_volt)(void);
 	int (*check_btb_temp)(void);
@@ -247,14 +264,20 @@ struct oplus_temp_chip {
 	int (*get_temp)(struct device *);
 };
 
-int oplus_pps_register_ops(struct oplus_pps_mcu_operations *ops);
+int oplus_pps_register_ops(struct oplus_pps_operations *ops);
 int oplus_pps_init(struct oplus_chg_chip *chip);
 //int pps_get_adapter_type(void);
 void oplus_pps_variables_reset(void);
 int oplus_pps_get_chg_status(void);
 int oplus_pps_set_chg_status(int status);
+bool oplus_pps_check_by_thermal(void);
 int oplus_pps_start(void);
 void oplus_pps_stop(void);
+bool oplus_is_pps_charging(void);
+void oplus_get_props_from_adsp_by_buffer(void);
+void oplus_pps_hard_reset_notify(void);
+extern bool oplus_get_pps_type(void);
 extern int oplus_chg_set_pps_config(int vbus_mv, int ibus_ma);
 extern u32 oplus_chg_get_pps_status(void);
-extern int oplus_chg_pps_get_max_cur(int vbus_mv);
+extern int oplus_chg_get_max_cur(int vbus_mv);
+extern int oplus_chg_set_pd_5v(void);

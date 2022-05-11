@@ -25,7 +25,7 @@
 #include <soc/oplus/device_info.h>
 
 #include "oplus_charger.h"
-#include "oplus_vooc.h"
+#include "oplus_warp.h"
 #include "oplus_gauge.h"
 #include "oplus_adapter.h"
 #include "oplus_wireless.h"
@@ -36,7 +36,6 @@ static struct oplus_wpc_chip *g_wpc_chip = NULL;
 int oplus_wpc_get_online_status(void)
 {
 	if (!g_wpc_chip) {
-		//chg_err("g_wpc_chip null, return\n");
 		return 0;
 	}
 
@@ -49,7 +48,6 @@ int oplus_wpc_get_online_status(void)
 int oplus_wpc_get_voltage_now(void)
 {
 	if (!g_wpc_chip) {
-		//chg_err("g_wpc_chip null, return\n");
 		return 0;
 	}
 
@@ -62,7 +60,6 @@ int oplus_wpc_get_voltage_now(void)
 int oplus_wpc_get_current_now(void)
 {
 	if (!g_wpc_chip) {
-		//chg_err("g_wpc_chip null, return\n");
 		return 0;
 	}
 
@@ -75,7 +72,6 @@ int oplus_wpc_get_current_now(void)
 int oplus_wpc_get_real_type(void)
 {
 	if (!g_wpc_chip) {
-		//chg_err("g_wpc_chip null, return\n");
 		return POWER_SUPPLY_TYPE_UNKNOWN;
 	}
 
@@ -216,7 +212,6 @@ void oplus_wpc_dcin_irq_enable(bool enable)
 bool oplus_wpc_get_wireless_charge_start(void)
 {
 	if (!g_wpc_chip) {
-		//chg_err("g_wpc_chip null, return\n");
 		return false;
 	}
 	if (g_wpc_chip->wpc_ops && g_wpc_chip->wpc_ops->wpc_get_wireless_charge_start) {
@@ -229,7 +224,6 @@ bool oplus_wpc_get_wireless_charge_start(void)
 bool oplus_wpc_get_normal_charging(void)
 {
 	if (!g_wpc_chip) {
-		//chg_err("g_wpc_chip null, return\n");
 		return false;
 	}
 	if (g_wpc_chip->wpc_ops && g_wpc_chip->wpc_ops->wpc_get_normal_charging) {
@@ -242,7 +236,6 @@ bool oplus_wpc_get_normal_charging(void)
 bool oplus_wpc_get_fast_charging(void)
 {
 	if (!g_wpc_chip) {
-		//chg_err("g_wpc_chip null, return\n");
 		return false;
 	}
 	if (g_wpc_chip->wpc_ops && g_wpc_chip->wpc_ops->wpc_get_fast_charging) {
@@ -303,7 +296,6 @@ bool oplus_wpc_get_fw_updating(void)
 int oplus_wpc_get_adapter_type(void)
 {
 	if (!g_wpc_chip) {
-		//chg_err("g_wpc_chip null, return\n");
 		return -EINVAL;
 	}
 	if (g_wpc_chip->wpc_ops && g_wpc_chip->wpc_ops->wpc_get_adapter_type) {

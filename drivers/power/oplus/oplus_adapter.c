@@ -1,14 +1,25 @@
-// SPDX-License-Identifier: GPL-2.0-only
-/*
- * Copyright (C) 2018-2020 Oplus. All rights reserved.
- */
+/**********************************************************************************
+* Copyright (c)  2008-2015  Guangdong OPLUS Mobile Comm Corp., Ltd
+* OPLUS_FEATURE_CHG_BASIC
+* Description: Charger IC management module for charger system framework.
+*                          Manage all charger IC and define abstarct function flow.
+**
+** Version: 1.0
+** Date created: 21:03:46, 05/04/2012
+** Author: Fuchun.Liao@BSP.CHG.Basic
+**
+** --------------------------- Revision History: ------------------------------------------------------------
+* <version>           <date>                <author>                            <desc>
+* Revision 1.0     2015-06-22        Fuchun.Liao@BSP.CHG.Basic         Created for new architecture from R9
+* Revision 1.1     2018-04-12        Fanhong.Kong@BSP.CHG.Basic        Divided for swarp from oplus_warp.c 
+************************************************************************************************************/
 
 #include <linux/delay.h>
 #include <linux/proc_fs.h>
 #include <linux/uaccess.h>
 
 #include "oplus_charger.h"
-#include "oplus_vooc.h"
+#include "oplus_warp.h"
 #include "oplus_gauge.h"
 #include "oplus_adapter.h"
 
@@ -35,6 +46,8 @@ static void oplus_adpater_awake_init(struct oplus_adapter_chip *chip)
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 9, 0))
 	wake_lock_init(&chip->adapter_wake_lock, WAKE_LOCK_SUSPEND, "adpater_wake_lock");
+#elif (LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 102))
+	chip->adapter_ws = wakeup_source_register("adpater_wake_lock");
 #else
 	chip->adapter_ws = wakeup_source_register(NULL, "adpater_wake_lock");
 #endif
@@ -78,11 +91,11 @@ static void adapter_update_work_func(struct work_struct *work)
         }		
         oplus_adapter_set_awake(chip, true);
 		
-		tx_gpio = oplus_vooc_get_uart_tx();
-		rx_gpio = oplus_vooc_get_uart_rx();
+		tx_gpio = oplus_warp_get_uart_tx();
+		rx_gpio = oplus_warp_get_uart_rx();
 		
         adapter_xlog_printk(CHG_LOG_CRTI, " begin\n");
-		oplus_vooc_uart_init();
+		oplus_warp_uart_init();
 		
         for (i = 0;i < 2;i++) {
                 update_result = chip->vops->adapter_update(tx_gpio, rx_gpio);
@@ -95,21 +108,21 @@ static void adapter_update_work_func(struct work_struct *work)
         }
 
         if (update_result) {
-				oplus_vooc_set_adapter_update_real_status(ADAPTER_FW_UPDATE_SUCCESS);
+				oplus_warp_set_adapter_update_real_status(ADAPTER_FW_UPDATE_SUCCESS);
         } else {
-				oplus_vooc_set_adapter_update_real_status(ADAPTER_FW_UPDATE_FAIL);
-				oplus_vooc_set_adapter_update_report_status(ADAPTER_FW_UPDATE_FAIL);
+				oplus_warp_set_adapter_update_real_status(ADAPTER_FW_UPDATE_FAIL);
+				oplus_warp_set_adapter_update_report_status(ADAPTER_FW_UPDATE_FAIL);
 				
         }
         msleep(20);
 		
-		oplus_vooc_uart_reset();
+		oplus_warp_uart_reset();
 		
         if (update_result) {
                 msleep(2000);
-				oplus_vooc_set_adapter_update_report_status(ADAPTER_FW_UPDATE_SUCCESS);
+				oplus_warp_set_adapter_update_report_status(ADAPTER_FW_UPDATE_SUCCESS);
         }
-        oplus_vooc_battery_update();
+        oplus_warp_battery_update();
         adapter_xlog_printk(CHG_LOG_CRTI, "  end update_result:%d\n", update_result);
         oplus_adapter_set_awake(chip, false);
 }
