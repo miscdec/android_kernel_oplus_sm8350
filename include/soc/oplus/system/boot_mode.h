@@ -13,6 +13,7 @@ enum{
         MSM_BOOT_MODE__WLAN,
         MSM_BOOT_MODE__MOS,
         MSM_BOOT_MODE__CHARGE,
+	MSM_BOOT_MODE__SE,        
         MSM_BOOT_MODE__SILENCE,
         MSM_BOOT_MODE__SAU,
         //xiaofan.yang@PSW.TECH.AgingTest, 2019/01/07,Add for factory agingtest
