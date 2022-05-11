@@ -6,7 +6,6 @@
 #include "../touchpanel_common.h"
 #include "touchpanel_autotest.h"
 #include "../touch_comon_api/touch_comon_api.h"
-#include "../touchpanel_healthinfo/touchpanel_healthinfo.h"
 #include <linux/seq_file.h>
 #include <linux/delay.h>
 #include <linux/uaccess.h>
@@ -131,7 +130,7 @@ int32_t *getpara_for_item(const struct firmware *fw, uint8_t item_index,
 	/*step4: check the item magic is support or not*/
 	item_header = (struct auto_test_item_header *)(fw->data + item_offset);
 
-	if (item_header->item_magic != Limit_MagicItem) {
+	if (item_header->item_magic != Limit_ItemMagic && item_header->item_magic != Limit_ItemMagic_V2) {
 		TPD_INFO("test item: %d magic number(%4x) is wrong\n", item_index,
 			 item_header->item_magic);
 		return NULL;
@@ -211,7 +210,7 @@ struct test_item_info *get_test_item_info(const struct firmware *fw,
 	/*step4: check the item magic is support or not*/
 	item_header = (struct auto_test_item_header *)(fw->data + item_offset);
 
-	if (item_header->item_magic != Limit_MagicItem) {
+	if (item_header->item_magic != Limit_ItemMagic && item_header->item_magic != Limit_ItemMagic_V2) {
 		TPD_INFO("test item: %d magic number(%4x) is wrong\n", item_index,
 			 item_header->item_magic);
 		goto ERROR;
@@ -260,7 +259,8 @@ EXPORT_SYMBOL(get_test_item_info);
  * Returning parameter number(success) or negative errno(failed)
  */
 int save_test_result(struct auto_testdata *p_auto_testdata,
-		     uint8_t  *data, enum limit_type limit_type, char  *limit_name)
+		     short  *data, int data_size,
+		     enum limit_type limit_type, char  *limit_name)
 {
 	uint8_t  data_buf[64] = {0};
 	int ret = 0;
@@ -283,6 +283,9 @@ int save_test_result(struct auto_testdata *p_auto_testdata,
 		      strlen(data_buf), p_auto_testdata->pos);
 
 	if (limit_type == LIMIT_TYPE_TX_RX_DATA) {
+		if (data_size < p_auto_testdata->rx_num * p_auto_testdata->tx_num) {
+			return -1;
+		}
 		for (i = 0; i < p_auto_testdata->rx_num * p_auto_testdata->tx_num; i++) {
 			snprintf(data_buf, 64, "%d,", data[i]);
 			tp_test_write(p_auto_testdata->fp, p_auto_testdata->length, data_buf,
@@ -300,6 +303,9 @@ int save_test_result(struct auto_testdata *p_auto_testdata,
 			      strlen(data_buf), p_auto_testdata->pos);
 
 	} else if (limit_type == LIMIT_TYPE_SLEF_TX_RX_DATA) {
+		if (data_size < p_auto_testdata->rx_num + p_auto_testdata->tx_num) {
+			return -1;
+		}
 		for (i = 0; i < p_auto_testdata->rx_num + p_auto_testdata->tx_num; i++) {
 			snprintf(data_buf, 64, "%d,", data[i]);
 			tp_test_write(p_auto_testdata->fp, p_auto_testdata->length, data_buf,
@@ -315,6 +321,83 @@ int save_test_result(struct auto_testdata *p_auto_testdata,
 }
 EXPORT_SYMBOL(save_test_result);
 
+static int tp_test_limit_switch(struct touchpanel_data *ts)
+{
+	char *p_node = NULL;
+	char *postfix = "_AGING";
+	uint8_t copy_len = 0;
+
+	if (!ts) {
+		TP_INFO(ts->tp_index, "ts is NULL\n");
+		return -1;
+	}
+
+	ts->panel_data.aging_test_limit_name = tp_devm_kzalloc(ts->dev, MAX_FW_NAME_LENGTH, GFP_KERNEL);
+	if (ts->panel_data.aging_test_limit_name == NULL) {
+		TP_INFO(ts->tp_index, "[TP]panel_data.test_limit_name kzalloc error\n");
+		return -1;
+	}
+
+	/**change **.img to **_AGING.img*/
+	p_node	= strstr(ts->panel_data.test_limit_name, ".");
+	if (p_node == NULL) {
+		TP_INFO(ts->tp_index, "p_node strstr error!\n");
+		goto EXIT;
+	}
+
+	copy_len = p_node - ts->panel_data.test_limit_name;
+	memcpy(ts->panel_data.aging_test_limit_name, ts->panel_data.test_limit_name, copy_len);
+	strlcat(ts->panel_data.aging_test_limit_name, postfix, MAX_LIMIT_DATA_LENGTH_COM);
+	strlcat(ts->panel_data.aging_test_limit_name, p_node, MAX_LIMIT_DATA_LENGTH_COM);
+	TP_INFO(ts->tp_index, "aging_test_limit_name is %s\n", ts->panel_data.aging_test_limit_name);
+	return 0;
+
+EXIT:
+	tp_devm_kfree(ts->dev, (void **)&ts->panel_data.aging_test_limit_name, MAX_FW_NAME_LENGTH);
+
+	return -1;
+}
+
+static int request_test_limit(const struct firmware **fw,
+			      char *test_limit_name, struct device *device)
+{
+	int ret = 0;
+	int retry = 5;
+
+	do {
+		ret = request_firmware(fw, test_limit_name, device);
+
+		if (!ret) {
+			break;
+		}
+	} while ((ret < 0) && (--retry > 0));
+
+	TPD_INFO("retry times %d\n", 5 - retry);
+	return ret;
+}
+
+static int request_real_test_limit(struct touchpanel_data *ts,
+				   const struct firmware **fw, char *test_limit_name, struct device *device)
+{
+	int ret = 0;
+
+	if (AGING_TEST_MODE == ts->aging_mode) {
+		ret = tp_test_limit_switch(ts);
+		if (ret < 0) {
+			return ret;
+		}
+		ret = request_test_limit(fw, ts->panel_data.aging_test_limit_name, device);
+		if (ret < 0) {
+			ret = request_test_limit(fw, test_limit_name, device);
+		}
+		tp_devm_kfree(ts->dev, (void **)&ts->panel_data.aging_test_limit_name, MAX_FW_NAME_LENGTH);
+	} else {
+		ret = request_test_limit(fw, test_limit_name, device);
+	}
+
+	return ret;
+}
+
 void tp_limit_read(struct seq_file *s, struct touchpanel_data *ts)
 {
 	int ret = 0;
@@ -325,7 +408,7 @@ void tp_limit_read(struct seq_file *s, struct touchpanel_data *ts)
 	uint32_t *p_item_offset = NULL;
 	int32_t *p_data32 = NULL;
 
-	ret = request_firmware(&fw, ts->panel_data.test_limit_name, ts->dev);
+	ret =  request_real_test_limit(ts, &fw, ts->panel_data.test_limit_name, ts->dev);
 
 	if (ret < 0) {
 		TPD_INFO("Request firmware failed - %s (%d)\n", ts->panel_data.test_limit_name,
@@ -367,7 +450,7 @@ void tp_limit_read(struct seq_file *s, struct touchpanel_data *ts)
 			 item_head->top_limit_offset, item_head->floor_limit_offset,
 			 item_head->para_num);
 
-		if (item_head->item_magic != Limit_MagicItem) {
+		if (item_head->item_magic != Limit_ItemMagic && item_head->item_magic != Limit_ItemMagic_V2) {
 			seq_printf(s, "item: %d limit data has some problem\n", item_head->item_bit);
 			continue;
 		}
@@ -537,7 +620,6 @@ int tp_auto_test(struct seq_file *s, void *v)
 {
 	struct touchpanel_data *ts = s->private;
 	int ret = 0;
-	int retry = 5;
 	int error_count = 0;
 
 	if (!ts) {
@@ -596,16 +678,8 @@ int tp_auto_test(struct seq_file *s, void *v)
 	}
 
 	/*step3:request test limit data from userspace*/
-	do {
-		ret = request_firmware(&ts->com_test_data.limit_fw,
+	ret =  request_real_test_limit(ts, &ts->com_test_data.limit_fw,
 				       ts->panel_data.test_limit_name, ts->dev);
-
-		if (!ret) {
-			break;
-		}
-	} while ((ret < 0) && (--retry > 0));
-
-	TP_INFO(ts->tp_index, "retry times %d\n", 5 - retry);
 
 	if (ret < 0) {
 		TP_INFO(ts->tp_index, "Request firmware failed - %s (%d)\n",
@@ -623,8 +697,6 @@ int tp_auto_test(struct seq_file *s, void *v)
 	ts->in_test_process = true;
 
 	error_count = ts->engineer_ops->auto_test(s, ts);
-
-	tp_healthinfo_report(&ts->monitor_data, HEALTH_TEST_AUTO, &error_count);
 
 	/*step5: release test limit firmware*/
 
@@ -709,8 +781,8 @@ int tp_black_screen_test(struct file *file, char __user *buffer, size_t count,
 	}
 
 	/*step3:request test limit data from userspace*/
-	ret = request_firmware(&ts->com_test_data.limit_fw,
-			       ts->panel_data.test_limit_name, ts->dev);
+	ret =  request_real_test_limit(ts, &ts->com_test_data.limit_fw,
+				       ts->panel_data.test_limit_name, ts->dev);
 
 	if (ret < 0) {
 		TP_INFO(ts->tp_index, "Request firmware failed - %s (%d)\n",
@@ -731,8 +803,6 @@ int tp_black_screen_test(struct file *file, char __user *buffer, size_t count,
 			 "1 errors:not support gesture test");
 		error_count = -1;
 	}
-
-	tp_healthinfo_report(&ts->monitor_data, HEALTH_TEST_BLACKSCREEN, &error_count);
 
 	ts->in_test_process = false;
 

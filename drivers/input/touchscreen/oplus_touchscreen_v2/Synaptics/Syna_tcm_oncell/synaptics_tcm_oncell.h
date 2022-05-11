@@ -13,7 +13,6 @@
 
 #include "../../touchpanel_common.h"
 #include "../synaptics_common.h"
-#include "../../touchpanel_prevention/touchpanel_prevention.h"
 
 #ifdef TPD_DEVICE
 #undef TPD_DEVICE
@@ -116,6 +115,7 @@ enum test_item_bit {
 	TYPE_TREXSHORT_CUSTOM   = 25,
 	TYPE_HYBRIDABS_DIFF_CBC = 26,
 	TYPE_HYBRIDABS_NOSIE    = 29,
+	TYPE_HYBRIDRAW_CAP_WITH_AD  = 47,
 };
 
 enum touch_status {
@@ -241,6 +241,7 @@ enum dynamic_config_id {
 	DC_GRIP_ABS_DARK_SEL = 0xE5,
 	DC_SET_REPORT_FRE = 0xE6,
 	DC_GESTURE_MASK = 0xFE,
+	DC_LOW_TEMP_ENABLE = 0xFD,
 };
 
 enum command {
@@ -413,10 +414,10 @@ struct object_data {
 	unsigned int z;
 	unsigned int tx_pos;
 	unsigned int rx_pos;
-	unsigned int exWidth;
-	unsigned int eyWidth;
-	unsigned int xERatio;
-	unsigned int yERatio;
+	unsigned int exwidth;
+	unsigned int eywidth;
+	unsigned int xeratio;
+	unsigned int yeratio;
 };
 
 struct touch_data {
@@ -480,6 +481,12 @@ struct syna_dc_in_driver {
 	uint16_t g_abs_dark_v;
 	uint16_t g_abs_dark_sel;
 };
+
+#define FIRMWARE_MODE_BL_MAX 2
+#define FPS_REPORT_NUM 6
+#define ERROR_STATE_MAX 3
+#define FWUPDATE_BL_MAX 3
+#define FW_BUF_SIZE             (256 * 1024)
 
 struct syna_tcm_data {
 	struct i2c_client *client;
@@ -553,6 +560,29 @@ struct syna_tcm_data {
 	bool chip_grip_en;
 	uint16_t default_gesture_mask;
 	uint16_t gesture_mask;
+	int freq_point;
+	unsigned int obj_attention;
+	bool *loading_fw;
+	unsigned int firmware_mode_count;
+	unsigned int upload_flag;
+	unsigned int error_state_count;
+	u8 *g_fw_buf;
+	size_t g_fw_len;
+	bool g_fw_sta;
+	int	probe_done;
+	bool *fw_update_app_support;
+	int fwupdate_bootloader;
+	bool switch_game_rate_support;
+	unsigned int fps_report_rate_num;
+	u32 fps_report_rate_array[FPS_REPORT_NUM];
+	/*temperatue data*/
+	u32 syna_tempepratue[2];
+	unsigned int syna_low_temp_enable;
+	unsigned int syna_low_temp_disable;
+	bool snr_read_support;
+	struct touchpanel_snr *snr;
+	/*normal config for oplus grip*/
+	int normal_config_version;
 };
 
 struct device_hcd {
@@ -652,10 +682,5 @@ int syna_tcm_rmi_write(struct syna_tcm_data *tcm_info,
 		       unsigned short addr, unsigned char *data, unsigned int length);
 
 extern void tp_fw_auto_reset_handle(struct touchpanel_data *ts);
-
-struct syna_support_grip_zone {
-	char name[GRIP_TAG_SIZE];
-	int (*handle_func)(void *chip_data, struct grip_zone_area *grip_zone, bool enable);
-};
 
 #endif  /*_SYNAPTICS_TCM_CORE_H_*/

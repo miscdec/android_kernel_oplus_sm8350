@@ -9,11 +9,8 @@
 #include <linux/input.h>
 #include <linux/serio.h>
 #include <linux/regulator/consumer.h>
-#include "../oplus_touchscreen_v2/tp_devices.h"
-#include "../oplus_touchscreen_v2/touchpanel_common.h"
-
-#include <soc/oppo/oppo_project.h>
-#include <soc/oppo/device_info.h>
+#include <soc/oplus/oplus_project.h>
+#include <soc/oplus/device_info.h>
 
 #include "touch.h"
 
@@ -29,7 +26,7 @@ int g_tp_prj_id = 0;
 int g_tp_dev_vendor = TP_UNKNOWN;
 int j = 0;
 char *chip_name = NULL;
-/*if can not compile success, please update vendor/oppo_touchsreen*/
+/*if can not compile success, please update vendor/oplus_touchsreen*/
 struct tp_dev_name tp_dev_names[] = {
 	{TP_OFILM, "OFILM"},
 	{TP_BIEL, "BIEL"},
@@ -67,9 +64,14 @@ bool tp_judge_ic_match(char *tp_ic_name)
 {
 	pr_err("[TP] tp_ic_name = %s \n", tp_ic_name);
 	pr_err("[TP] tp_dsi_display_primary = %s \n", tp_dsi_display_primary);
+	pr_err("[TP] tp_dsi_display_secondary = %s \n", tp_dsi_display_secondary);
 
 	if (strstr(tp_dsi_display_primary, tp_ic_name)) {
-		pr_err("[TP] tp_judge_ic_match match ok\n");
+		pr_err("[TP] display_primary:tp_judge_ic_match match ok\n");
+		return true;
+	}
+	if (strstr(tp_dsi_display_secondary, tp_ic_name)) {
+		pr_err("[TP] display_secondary:tp_judge_ic_match match ok\n");
 		return true;
 	}
 	pr_err("[TP] tp_judge_ic_match not match ok\n");
@@ -84,14 +86,15 @@ int tp_judge_ic_match_commandline(struct panel_info *panel_data)
 	int i = 0;
 	prj_id = get_project();
 
-	pr_err("[TP] tp_dsi_display_primary = %s \n", tp_dsi_display_primary);
 	for(i = 0; i < panel_data->project_num; i++) {
 		if(prj_id == panel_data->platform_support_project[i]) {
 			g_tp_prj_id = panel_data->platform_support_project_dir[i];
 			pr_err("[TP] Driver match support project [%d]\n", panel_data->platform_support_project[i]);
 
 			for(j = 0; j < panel_data->panel_num; j++) {
-			if(strstr(tp_dsi_display_primary, panel_data->platform_support_commandline[j]) || strstr("default_commandline", panel_data->platform_support_commandline[j])) {
+			if(strstr(tp_dsi_display_primary, panel_data->platform_support_commandline[j])
+				|| strstr(tp_dsi_display_secondary, panel_data->platform_support_commandline[j])
+				|| strstr("default_commandline", panel_data->platform_support_commandline[j])) {
 				panel_data->tp_type = panel_data->panel_type[j];
 				if(panel_data->chip_num > 1) {
 					chip_name = panel_data->chip_name[j];
@@ -100,7 +103,7 @@ int tp_judge_ic_match_commandline(struct panel_info *panel_data)
 					pr_err("[TP] match panel type OK , panel type is [%d]\n", panel_data->tp_type);
 					return j;
 				}
-			pr_err("[TP] Panel not found\n");
+				pr_err("[TP] Panel not found\n");
 			}
 		}
 	}

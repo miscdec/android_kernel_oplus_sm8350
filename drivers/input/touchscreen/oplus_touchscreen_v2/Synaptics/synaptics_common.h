@@ -20,7 +20,7 @@
 #include "../touchpanel_common.h"
 #include "../touch_comon_api/touch_comon_api.h"
 #include "../touchpanel_autotest/touchpanel_autotest.h"
-#include "../touchpanel_healthinfo/touchpanel_healthinfo.h"
+
 
 #include "synaptics_firmware_v2.h"
 
@@ -178,6 +178,7 @@ enum {
 	TYPE_TEST9            = 0x09,
 	TYPE_TEST10          = 0x0a,
 	TYPE_TEST11          = 0x0b,
+	TYPE_TEST12          = 0x0c,
 	TYPE_RT_MAX           = 0xFF,
 };
 

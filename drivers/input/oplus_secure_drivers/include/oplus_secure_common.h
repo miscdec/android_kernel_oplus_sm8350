@@ -1,7 +1,13 @@
-/* SPDX-License-Identifier: GPL-2.0-only */
-/*
- * Copyright (C) 2020 Oplus. All rights reserved.
- */
+/************************************************************************************
+** File: - drivers/input/oplus_secure_drivers/include/oplus_secure_common.h
+** Copyright (C), 2008-2016, OPLUS Mobile Comm Corp., Ltd
+**
+** Description:
+**          fingerprint compatibility configuration
+**
+** Version: 1.0
+** Date created: 18:03:11,23/07/2016
+************************************************************************************/
 
 #ifndef _OPLUS_SECURE_COMMON_H_
 #define _OPLUS_SECURE_COMMON_H_
@@ -13,7 +19,7 @@ enum {
         SECURE_OK,
         SECURE_ERROR_GPIO,
         SECURE_ERROR_GENERAL,
-} ;
+};
 
 typedef enum {
         SECURE_BOOT_OFF,

@@ -1,14 +1,7 @@
-/***************************************************
- * File:touch.h
- * VENDOR_EDIT
- * Copyright (c)  2008- 2030  Oplus Mobile communication Corp.ltd.
- * Description:
- *             tp dev
- * Version:1.0:
- * Date created:2016/09/02
- * Author: Qicai.gu@Bsp.Driver
- * TAG: BSP.TP.Init
-*/
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (C) 2016 Oplus. All rights reserved.
+ */
 
 #ifndef _TOUCH_H_
 #define _TOUCH_H_
@@ -17,7 +10,6 @@
 #include <linux/module.h>
 #include "../oplus_touchscreen_v2/tp_devices.h"
 #include "../oplus_touchscreen_v2/touchpanel_common.h"
-
 
 
 extern bool tp_judge_ic_match(char *tp_ic_name);

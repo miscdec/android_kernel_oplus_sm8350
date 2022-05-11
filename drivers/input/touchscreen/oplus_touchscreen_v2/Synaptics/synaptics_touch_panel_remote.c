@@ -33,13 +33,13 @@ static int remote_rmit_set_page(struct rmidev_data *rmidev_data,
 static int remote_rmit_put_page(struct rmidev_data *rmidev_data);
 
 static struct i2c_client *remote_rmi4_get_i2c_client(
-								struct rmidev_data *rmidev_data);
+	struct rmidev_data *rmidev_data);
 
 static struct remotepanel_data *remote_free_panel_data(
-								struct remotepanel_data *pdata);
+	struct remotepanel_data *pdata);
 
 static struct i2c_client *remote_rmi4_get_i2c_client(
-								struct rmidev_data *rmidev_data)
+	struct rmidev_data *rmidev_data)
 {
 	struct rmidev_data *dev_data = (struct rmidev_data *)rmidev_data->rmi_dev->data;
 	return dev_data->pdata->client;
@@ -73,9 +73,8 @@ static int remote_rmit_set_page(struct rmidev_data *rmidev_data,
 	msg[0].buf = buf;
 
 	for (retry = 0; retry < 2; retry++) {
-		if (i2c_transfer(i2c_client->adapter, msg, 1) == 1) {
+		if (i2c_transfer(i2c_client->adapter, msg, 1) == 1)
 			break;
-		}
 
 		msleep(20);
 	}
@@ -119,9 +118,8 @@ static int remote_rmit_put_page(struct rmidev_data *rmidev_data)
 	msg[0].buf = buf;
 
 	for (retry = 0; retry < 2; retry++) {
-		if (i2c_transfer(i2c_client->adapter, msg, 1) == 1) {
+		if (i2c_transfer(i2c_client->adapter, msg, 1) == 1)
 			break;
-		}
 
 		msleep(20);
 	}
@@ -189,9 +187,8 @@ int remote_rmi4_i2c_read(struct rmidev_data *rmidev_data, unsigned short addr,
 
 	retval = remote_rmit_set_page(rmidev_data, addr);
 
-	if (retval < 0) {
+	if (retval < 0)
 		goto exit;
-	}
 
 	for (retry = 0; retry < 2; retry++) {
 		if (i2c_transfer(i2c_client->adapter, msg, 2) == 2) {
@@ -250,9 +247,8 @@ int remote_rmi4_i2c_write(struct rmidev_data *rmidev_data,
 	msg[0].buf = buf;
 	retval = remote_rmit_set_page(rmidev_data, addr);
 
-	if (retval < 0) {
+	if (retval < 0)
 		goto exit;
-	}
 
 	buf[0] = addr & 0xff;
 	memcpy(&buf[1], &data[0], length);
@@ -284,12 +280,11 @@ exit:
 
 int remote_rmi4_i2c_enable(struct rmidev_data *dev_data, bool enable)
 {
-	if (enable) {
+	if (enable)
 		*(dev_data->pdata->enable_remote) = 0;
 
-	} else {
+	else
 		*(dev_data->pdata->enable_remote) = 1;
-	}
 
 	return 0;
 }
@@ -375,13 +370,11 @@ static ssize_t rmidev_read(struct file *filp, char __user *buf,
 		return -EBADF;
 	}
 
-	if (count == 0) {
+	if (count == 0)
 		return 0;
-	}
 
-	if (count > (REG_ADDR_LIMIT - *f_pos)) {
+	if (count > (REG_ADDR_LIMIT - *f_pos))
 		count = REG_ADDR_LIMIT - *f_pos;
-	}
 
 	tmpbuf = kzalloc(count + 1, GFP_KERNEL);
 
@@ -399,16 +392,14 @@ static ssize_t rmidev_read(struct file *filp, char __user *buf,
 			 tmpbuf,
 			 count);
 
-	if (retval < 0) {
+	if (retval < 0)
 		goto clean_up;
-	}
 
-	if (copy_to_user(buf, tmpbuf, count)) {
+	if (copy_to_user(buf, tmpbuf, count))
 		retval = -EFAULT;
 
-	} else {
+	else
 		*f_pos += retval;
-	}
 
 clean_up:
 	mutex_unlock(&(dev_data->file_mutex));
@@ -439,13 +430,11 @@ static ssize_t rmidev_write(struct file *filp, const char __user *buf,
 		return -EBADF;
 	}
 
-	if (count == 0) {
+	if (count == 0)
 		return 0;
-	}
 
-	if (count > (REG_ADDR_LIMIT - *f_pos)) {
+	if (count > (REG_ADDR_LIMIT - *f_pos))
 		count = REG_ADDR_LIMIT - *f_pos;
-	}
 
 	tmpbuf = kzalloc(count + 1, GFP_KERNEL);
 
@@ -468,9 +457,8 @@ static ssize_t rmidev_write(struct file *filp, const char __user *buf,
 			 tmpbuf,
 			 count);
 
-	if (retval >= 0) {
+	if (retval >= 0)
 		*f_pos += retval;
-	}
 
 	mutex_unlock(&(dev_data->file_mutex));
 	mutex_unlock(dev_data->pdata->pmutex);
@@ -509,12 +497,11 @@ static int rmidev_open(struct inode *inp, struct file *filp)
 	pr_err("%s: Attention interrupt disabled\n", __func__);
 	disable_irq_nosync(dev_data->pdata->irq);
 
-	if (dev_data->ref_count < 1) {
+	if (dev_data->ref_count < 1)
 		dev_data->ref_count++;
 
-	} else {
+	else
 		retval = -EACCES;
-	}
 
 	mutex_unlock(&(dev_data->file_mutex));
 
@@ -537,9 +524,8 @@ static int rmidev_release(struct inode *inp, struct file *filp)
 
 	dev_data->ref_count--;
 
-	if (dev_data->ref_count < 0) {
+	if (dev_data->ref_count < 0)
 		dev_data->ref_count = 0;
-	}
 
 	remote_rmi4_i2c_enable(dev_data, true);
 	pr_err("%s: Attention interrupt enabled\n", __func__);
@@ -565,9 +551,8 @@ static void rmidev_device_cleanup(struct rmidev_data *dev_data)
 	if (dev_data) {
 		devno = dev_data->main_dev.dev;
 
-		if (dev_data->device_class) {
+		if (dev_data->device_class)
 			device_destroy(dev_data->device_class, devno);
-		}
 
 		cdev_del(&dev_data->main_dev);
 		unregister_chrdev_region(devno, 1);
@@ -581,9 +566,8 @@ static void rmidev_device_cleanup(struct rmidev_data *dev_data)
 
 static char *rmi_char_devnode(struct device *dev, umode_t *mode)
 {
-	if (!mode) {
+	if (!mode)
 		return NULL;
-	}
 
 	*mode = (S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
 
@@ -612,11 +596,10 @@ struct remotepanel_data *remote_alloc_panel_data(void)
 EXPORT_SYMBOL(remote_alloc_panel_data);
 
 static struct remotepanel_data *remote_free_panel_data(
-									struct remotepanel_data *pdata)
+	struct remotepanel_data *pdata)
 {
-	if (pdata) {
+	if (pdata)
 		kfree(pdata);
-	}
 
 	pdata = NULL;
 	return NULL;
@@ -657,24 +640,21 @@ int register_remote_device(struct remotepanel_data *pdata)
 
 	retval = rmidev_create_device_class(dev_data);
 
-	if (retval < 0) {
+	if (retval < 0)
 		goto err_device_class;
-	}
 
 	if (dev_data->rmidev_major_num) {
 		dev_no = MKDEV(dev_data->rmidev_major_num, DEV_NUMBER);
 		retval = register_chrdev_region(dev_no, 1, CHAR_DEVICE_NAME);
 
-		if (retval < 0) {
+		if (retval < 0)
 			goto err_device_region;
-		}
 
 	} else {
 		retval = alloc_chrdev_region(&dev_no, 0, 1, CHAR_DEVICE_NAME);
 
-		if (retval < 0) {
+		if (retval < 0)
 			goto err_device_region;
-		}
 
 		dev_data->rmidev_major_num = MAJOR(dev_no);
 	}
@@ -690,9 +670,8 @@ int register_remote_device(struct remotepanel_data *pdata)
 
 	retval = cdev_add(&dev_data->main_dev, dev_no, 1);
 
-	if (retval < 0) {
+	if (retval < 0)
 		goto err_char_device;
-	}
 
 	dev_set_name(&rmidev->dev, "rmidev%d", MINOR(dev_no));
 
@@ -730,9 +709,8 @@ void unregister_remote_device(struct remotepanel_data *pdata)
 {
 	struct rmidev_data *dev_data = pdata->p_rmidev_data;
 
-	if (!dev_data) {
+	if (!dev_data)
 		return;
-	}
 
 	if (dev_data) {
 		rmidev_device_cleanup(dev_data);

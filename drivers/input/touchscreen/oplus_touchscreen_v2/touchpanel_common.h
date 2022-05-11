@@ -12,6 +12,9 @@
 
 #include "util_interface/touch_interfaces.h"
 #include "tp_devices.h"
+#include <linux/miscdevice.h>
+#include <linux/version.h>
+
 
 #ifdef CONFIG_TOUCHIRQ_UPDATE_QOS
 #include <linux/pm_qos.h>
@@ -19,17 +22,22 @@
 #endif
 
 #ifndef CONFIG_REMOVE_OPLUS_FUNCTION
-#include <soc/oppo/device_info.h>
+#include <soc/oplus/device_info.h>
+#endif
+
+#if IS_ENABLED(CONFIG_DRM_OPLUS_PANEL_NOTIFY) || IS_ENABLED(CONFIG_DRM_PANEL_NOTIFY)
+#include <drm/drm_panel.h>
 #endif
 
 #define TP_SUPPORT_MAX 3
 #define TP_NAME_SIZE_MAX 25
 
+#define TP_MSG_SIZE_MAX 32
+
 #define EFTM (250)
 #define FW_UPDATE_COMPLETE_TIMEOUT  msecs_to_jiffies(40*1000)
 
 /*********PART2:Define Area**********************/
-#define TYPE_B_PROTOCOL
 
 #define PAGESIZE 512
 #define MAX_GESTURE_COORD 6
@@ -318,6 +326,7 @@ struct button_map {
 struct panel_info {
 	char    *fw_name;                               /*FW name*/
 	char    *test_limit_name;                       /*test limit name*/
+	char    *aging_test_limit_name;                 /*aging test limit name*/
 	char    *extra;                                 /*for some ic, may need other information*/
 	uint32_t tp_fw;                                 /*FW Version Read from IC*/
 	tp_dev  tp_type;
@@ -474,6 +483,7 @@ struct monitor_data {
 	struct debug_info_proc_operations  *debug_info_ops; /*debug info data*/
 
 	u64 boot_time;
+	u64 stat_time;
 	u64 probe_time;
 	u64 max_resume_time;
 	u64 max_suspend_time;
@@ -555,7 +565,7 @@ struct monitor_data {
 	int blackscreen_test_failed_times;
 
 	int gesture_waiting;
-	bool is_gesture_waiting_resume;
+	bool is_gesture_waiting_read;
 	u64 gesture_received_time;
 
 	struct list_head        gesture_values_list;
@@ -645,6 +655,27 @@ typedef struct apk_proc_operations {
 
 #endif
 
+#define SNR_RESET(snr)  \
+	do { \
+		snr.max = 0; \
+		snr.min = 0; \
+		snr.sum = 0; \
+		snr.noise = 0; \
+	} while (0)
+
+struct touchpanel_snr {
+	uint16_t x;
+	uint16_t y;
+	uint8_t channel_x;
+	uint8_t channel_y;
+	uint8_t point_status;
+	bool doing;
+	int max;
+	int min;
+	int sum;
+	int noise;
+};
+
 struct aging_test_proc_operations;
 struct debug_info_proc_operations;
 struct touchpanel_data {
@@ -677,6 +708,9 @@ struct touchpanel_data {
 	struct firmware                 *firmware_in_dts;
 	bool kernel_grip_support;                           /*using grip function in kernel touch driver*/
 	bool grip_no_driver_support;
+	bool high_frame_rate_support;
+	uint32_t high_frame_rate_time;
+	bool snr_read_support;                              /*feature to support reading snr data*/
 	int tp_index;
 	/******For FW update area********/
 	bool loading_fw;                                    /*touchpanel FW updating*/
@@ -693,6 +727,7 @@ struct touchpanel_data {
 	struct black_gesture_test gesture_test;  /*screen off gesture test struct*/
 	struct com_test_data com_test_data;	/*test comon data*/
 	struct engineer_test_operations   *engineer_ops;     /*call_back function*/
+	bool auto_test_need_cal_support;
 
 	/******For button key area********/
 	/*every bit declear one state of key "reserve(keycode)|home(keycode)|menu(keycode)|back(keycode)"*/
@@ -754,6 +789,7 @@ struct touchpanel_data {
 	struct aging_test_proc_operations  *aging_test_ops;
 	struct register_info reg_info;	/*debug node for register length*/
 	struct monitor_data    monitor_data;                /*health monitor data*/
+	struct touchpanel_snr   snr[MAX_FINGER_NUM];        /*snr data*/
 
 	/******For prevention area********/
 	struct mutex		report_mutex;                /*mutex for lock input report flow*/
@@ -786,6 +822,7 @@ struct touchpanel_data {
 	int irq_slot;                                       /*debug use, for print all finger's first touch log*/
 	uint8_t	report_point_first_enable;               /*reporting points first enable :1 ,disable 0;*/
 	int noise_level;                                    /*for game mode control*/
+	int high_frame_value;
 	int limit_enable;                                   /*control state of limit enable */
 
 	bool report_rate_white_list_support;
@@ -799,9 +836,18 @@ struct touchpanel_data {
 	struct work_struct     speed_up_work;               /*using for speedup resume*/
 	/*using for touchpanel speedup resume wq*/
 	struct workqueue_struct *speedup_resume_wq;
-#if IS_ENABLED(CONFIG_DRM_MSM) || IS_ENABLED(CONFIG_DRM_OPLUS_NOTIFY) || IS_ENABLED(CONFIG_FB)
+#if IS_ENABLED(CONFIG_DRM_OPLUS_PANEL_NOTIFY)
+	struct drm_panel *active_panel;
+	struct notifier_block fb_notif; /*register to control suspend/resume*/
+#elif IS_ENABLED(CONFIG_DRM_PANEL_NOTIFY)
+	struct drm_panel *active_panel;
+	void *notifier_cookie;
+#elif IS_ENABLED(CONFIG_OPLUS_MTK_DRM_GKI_NOTIFY)
+	struct notifier_block disp_notifier;
+#elif IS_ENABLED(CONFIG_DRM_MSM) || IS_ENABLED(CONFIG_DRM_OPLUS_NOTIFY) || IS_ENABLED(CONFIG_FB)
 	struct notifier_block fb_notif;	/*register to control suspend/resume*/
 #endif
+
 
 	/******For usb or headset notify area********/
 	bool is_headset_checked;                            /*state of headset for usb*/
@@ -813,6 +859,10 @@ struct touchpanel_data {
 
 	struct workqueue_struct *charger_pump_wq;           /*state of charger or usb*/
 	struct work_struct     charger_pump_work;           /*state of charger or usb*/
+	struct workqueue_struct
+		*key_trigger_wq;            /*state of volume_key trigger*/
+	struct work_struct
+		key_trigger_work;            /*state of volume_key trigger*/
 	struct workqueue_struct *headset_pump_wq;           /*state of headset or usb*/
 	struct work_struct     headset_pump_work;           /*state of headset or usb*/
 	/******For debug apk area********/
@@ -824,12 +874,13 @@ struct touchpanel_data {
 	u8 *gesture_buf;
 	bool gesture_debug_sta;
 #endif
-#ifdef CONFIG_TOUCHPANEL_ALGORITHM
-	struct touch_algorithm_info *algo_info;
-#endif
 	/******For QOS area********/
 #ifdef CONFIG_TOUCHIRQ_UPDATE_QOS
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+	struct dev_pm_qos_request pm_qos_req;
+#else
 	struct pm_qos_request pm_qos_req;
+#endif
 	int pm_qos_value;
 	int pm_qos_state;
 #endif
@@ -840,6 +891,7 @@ struct touchpanel_data {
 
 	/******For aging test area********/
 	int aging_test;
+	int aging_mode;
 
 	/******For smooth sensitive area********/
 	bool smooth_level_array_support;
@@ -859,9 +911,16 @@ struct touchpanel_data {
 	/******For lcd fps area********/
 	bool lcd_tp_refresh_support;                      /*lcd nofity tp refresh fps switch*/
 	int lcd_fps;                                      /*save lcd refresh*/
-	struct work_struct     tp_refresh_work;            /*using for tp_refresh resume*/
+	struct work_struct
+		tp_refresh_work;            /*using for tp_refresh resume*/
 	struct workqueue_struct *tp_refresh_wq;            /*using for tp_refresh wq*/
 	bool enable_point_auto_change;
+	struct miscdevice misc_device;
+	bool misc_opened;
+	struct message_list *msg_list;
+	int ioc_init_size;
+	char *ioc_init_buf;
+	u8 en_touch_event_helper;
 };
 
 #ifdef CONFIG_OPLUS_TP_APK
@@ -910,7 +969,7 @@ struct oplus_touchpanel_operations {
 	void (*register_info_read)(void *chip_data, uint16_t register_addr,
 				   uint8_t *result, uint8_t length);    /*add for read registers*/
 	/*some ic need opearation if resume prepare*/
-	int (*speed_up_resume_prepare) (void *chip_data);
+	int (*speed_up_resume_prepare)(void *chip_data);
 	/*some ic need specific opearation in resuming*/
 	int (*specific_resume_operate)(void *chip_data,
 				       struct specific_resume_data *p_resume_data);
@@ -940,11 +999,7 @@ struct oplus_touchpanel_operations {
 	void (*rate_white_list_ctrl)(void *chip_data, int value);
 	int (*smooth_lv_set)(void *chip_data, int level);
 	int (*sensitive_lv_set)(void *chip_data, int level);
-	int (*send_temperature)       (void *chip_data, int value, bool status);
-#ifdef CONFIG_TOUCHPANEL_ALGORITHM
-	int (*special_points_report)(void *chip_data, struct point_info *points,
-				     int max_num);
-#endif
+	int (*send_temperature)(void *chip_data, int value, bool status);
 	int (*tp_refresh_switch)(void *chip_data, int fps);
 	void (*set_gesture_state)(void *chip_data, int state);
 	int (*get_touch_points_auto)(void *chip_data,
@@ -958,7 +1013,15 @@ struct oplus_touchpanel_operations {
 
 	void (*screenon_fingerprint_info_auto)(void *chip_data,
 					       struct fp_underscreen_info *fp_tpinfo,
-					       struct resolution_info *resolution_info); /*get gesture info of fingerprint underscreen when screen on*/
+					       struct resolution_info
+					       *resolution_info); /*get gesture info of fingerprint underscreen when screen on*/
+	void (*calibrate)(struct seq_file *s, void *chip_data);
+	bool (*get_cal_status)(struct seq_file *s, void *chip_data);
+	int (*get_touch_points_help)(void *chip_data,
+				     struct point_info *points,
+				     int max_num,
+				     struct resolution_info *resolution_info); /*return point bit-map auto*/
+	int (*set_high_frame_rate)(void *chip_data, int value, int time);
 };
 
 struct aging_test_proc_operations {
@@ -968,6 +1031,7 @@ struct aging_test_proc_operations {
 
 struct debug_info_proc_operations {
 	void (*delta_read)(struct seq_file *s, void *chip_data);
+	void (*key_trigger_delta_read)(void *chip_data);
 	void (*self_delta_read)(struct seq_file *s, void *chip_data);
 	void (*self_raw_read)(struct seq_file *s, void *chip_data);
 	void (*baseline_read)(struct seq_file *s, void *chip_data);
@@ -980,6 +1044,7 @@ struct debug_info_proc_operations {
 	void (*reserve3)(struct seq_file *s, void *chip_data);
 	void (*reserve4)(struct seq_file *s, void *chip_data);
 	void (*get_delta_data)(void *chip_data, int32_t *deltadata);
+	void (*delta_snr_read)(struct seq_file *s, void *chip_data, uint32_t count);
 };
 
 /*********PART3:function or variables for other files**********************/
@@ -1006,7 +1071,8 @@ extern int tp_util_get_vendor(struct hw_resource *hw_res,
 extern bool tp_judge_ic_match(char *tp_ic_name);
 extern int tp_judge_ic_match_commandline(struct panel_info *panel_data);
 
-extern int request_firmware_select(const struct firmware **firmware_p, const char *name, struct device *device);
+extern int request_firmware_select(const struct firmware **firmware_p,
+				   const char *name, struct device *device);
 bool is_oem_unlocked(void);
 int  get_oem_verified_boot_state(void);
 
@@ -1014,4 +1080,4 @@ int  get_oem_verified_boot_state(void);
 int opticalfp_irq_handler(struct fp_underscreen_info *fp_tpinfo);
 #endif
 
-#endif
+#endif /*_TOUCHPANEL_COMMON_H_*/

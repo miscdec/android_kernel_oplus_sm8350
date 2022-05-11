@@ -119,4 +119,10 @@ obj-$(CONFIG_TOUCHPANEL_OPLUS) += oplus_touchscreen_v2/
 
 obj-$(CONFIG_TOUCHSCREEN_SYNAPTICS_TCM)	+= synaptics_tcm/
 obj-$(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX) += synaptics_dsx/
+
+
+#ifdef OPLUS_FEATURE_TP_BASIC
+obj-$(CONFIG_TOUCHPANEL_ST80Y) += st80y/
+#endif /*OPLUS_FEATURE_TP_BASIC*/
+
 obj-$(CONFIG_TOUCHSCREEN_NT36XXX)	+= nt36xxx/

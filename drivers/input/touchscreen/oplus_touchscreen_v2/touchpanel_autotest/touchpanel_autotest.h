@@ -11,8 +11,16 @@
 
 #define Limit_MagicNum1     0x494D494C
 #define Limit_MagicNum2     0x474D4954
+
 #define Limit_MagicNum2_V2  0x32562D54
-#define Limit_MagicItem     0x4F50504F
+#define Limit_ItemMagic     0x4F50504F
+#define Limit_ItemMagic_V2  0x4F504C53
+
+#define DISABLE_ACTIVE_MODE	0
+#define ENBLE_ACTIVE_MODE	1
+#define NORMAL_TEST_MODE	2
+#define AGING_TEST_MODE		3
+#define MAX_LIMIT_DATA_LENGTH_COM         100
 
 enum limit_type {
 	LIMIT_TYPE_NO_DATA                 = 0x00,            /*means no limit data*/
@@ -88,7 +96,7 @@ int32_t *getpara_for_item(const struct firmware *fw, uint8_t item_index,
 struct test_item_info *get_test_item_info(const struct firmware *fw,
 		uint8_t item_index);
 int save_test_result(struct auto_testdata *p_auto_testdata,
-		     uint8_t  *data, enum limit_type limit_type,
+		     short  *data, int data_size, enum limit_type limit_type,
 		     char  *limit_name);
 ssize_t tp_test_write(void *data_start, size_t max_count,
 		      const char *buf, size_t count, ssize_t *pos);

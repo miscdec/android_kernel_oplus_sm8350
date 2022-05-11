@@ -11,7 +11,6 @@
 #include "touch_interfaces.h"
 #include "../touchpanel_common.h"
 #include "../touch_comon_api/touch_comon_api.h"
-#include "../touchpanel_healthinfo/touchpanel_healthinfo.h"
 
 #define FIX_I2C_LENGTH   256
 
@@ -252,12 +251,6 @@ int touch_i2c_write_block(struct i2c_client *client, u16 addr,
 	if (retry == MAX_I2C_RETRY_TIME) {
 		TPD_INFO("%s: I2C write over retry limit\n", __func__);
 		retval = -EIO;
-	}
-
-	if (ts->health_monitor_support) {
-		ts->monitor_data.bus_buf = msg[0].buf;
-		ts->monitor_data.bus_len = msg[0].len;
-		tp_healthinfo_report(&ts->monitor_data, HEALTH_BUS, &retval);
 	}
 
 	mutex_unlock(&ts->interface_data.bus_mutex);
@@ -605,19 +598,6 @@ inline int touch_i2c_read(struct i2c_client *client, char *writebuf,
 	}
 
 	memcpy(readbuf, ts->interface_data.read_buf, readlen);
-	if (writelen > 0) {
-		if (ts->health_monitor_support) {
-			ts->monitor_data.bus_buf = msg[0].buf;
-			ts->monitor_data.bus_len = msg[0].len;
-			tp_healthinfo_report(&ts->monitor_data, HEALTH_BUS, &retval);
-		}
-	} else {
-		if (ts->health_monitor_support) {
-			ts->monitor_data.bus_buf = message.buf;
-			ts->monitor_data.bus_len = message.len;
-			tp_healthinfo_report(&ts->monitor_data, HEALTH_BUS, &retval);
-		}
-	}
 
 	mutex_unlock(&ts->interface_data.bus_mutex);
 	return retval;

@@ -1,29 +1,15 @@
- /************************************************************************************
-** File: - fingerprints_hal\drivers\goodix_fp\gf_spi.h
-** OPLUS_FEATURE_FINGERPRINT
-** Copyright (C), 2008-2016, OPPO Mobile Comm Corp., Ltd
-**
-** Description:
-**      driver definition for sensor driver
-**
-** Version: 1.0
-** Date created: 15:03:11,12/08/2017
-** Author:oujinrong@BSP.Fingerprint.Basic
-** TAG: BSP.Fingerprint.Basic
-**
-** --------------------------- Revision History: --------------------------------
-** <author>     <data>        <desc>
-**  oujinrong   2019/09/03    add power list for Euclid
-************************************************************************************/
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (C) 2018-2020 Oplus. All rights reserved.
+ */
 
 #ifndef __GF_SPI_H
 #define __GF_SPI_H
 
 #include <linux/types.h>
 #include <linux/notifier.h>
-#include "../include/oppo_fp_common.h"
+#include "../include/oplus_fp_common.h"
 
-/**********************************************************/
 enum FP_MODE{
 	GF_IMAGE_MODE = 0,
 	GF_KEY_MODE,
@@ -78,7 +64,7 @@ typedef enum gf_key_event {
 
 struct gf_key {
 	enum gf_key_event key;
-	uint32_t value;   /* key down = 1, key up = 0 */
+	uint32_t value;
 };
 
 struct gf_key_map {
@@ -93,7 +79,7 @@ struct gf_ioc_chip_info {
 	unsigned char reserved[5];
 };
 
-#define GF_IOC_MAGIC    'g'     //define magic number
+#define GF_IOC_MAGIC    'g'
 #define GF_IOC_INIT             _IOR(GF_IOC_MAGIC, 0, uint8_t)
 #define GF_IOC_EXIT             _IO(GF_IOC_MAGIC, 1)
 #define GF_IOC_RESET            _IO(GF_IOC_MAGIC, 2)
@@ -108,36 +94,35 @@ struct gf_ioc_chip_info {
 #define GF_IOC_GET_FW_INFO      _IOR(GF_IOC_MAGIC, 11, uint8_t)
 #define GF_IOC_REMOVE           _IO(GF_IOC_MAGIC, 12)
 #define GF_IOC_CHIP_INFO        _IOW(GF_IOC_MAGIC, 13, struct gf_ioc_chip_info)
-
-#define GF_IOC_WAKELOCK_TIMEOUT_ENABLE        _IO(GF_IOC_MAGIC, 18 )
-#define GF_IOC_WAKELOCK_TIMEOUT_DISABLE        _IO(GF_IOC_MAGIC, 19 )
-#define GF_IOC_CLEAN_TOUCH_FLAG        _IO(GF_IOC_MAGIC, 20 )
+#define GF_IOC_POWER_RESET      _IO(GF_IOC_MAGIC, 17)
+#define GF_IOC_WAKELOCK_TIMEOUT_ENABLE         _IO(GF_IOC_MAGIC, 18)
+#define GF_IOC_WAKELOCK_TIMEOUT_DISABLE        _IO(GF_IOC_MAGIC, 19)
+#define GF_IOC_CLEAN_TOUCH_FLAG                _IO(GF_IOC_MAGIC, 20)
+#define GF_IOC_AUTO_SEND_TOUCHDOWN             _IO(GF_IOC_MAGIC, 21)
+#define GF_IOC_AUTO_SEND_TOUCHUP               _IO(GF_IOC_MAGIC, 22)
 
 #if defined(SUPPORT_NAV_EVENT)
 #define GF_IOC_NAV_EVENT	_IOW(GF_IOC_MAGIC, 14, gf_nav_event_t)
-#define  GF_IOC_MAXNR    15  /* THIS MACRO IS NOT USED NOW... */
+#define  GF_IOC_MAXNR    15
 #else
-#define  GF_IOC_MAXNR    14  /* THIS MACRO IS NOT USED NOW... */
+#define  GF_IOC_MAXNR    14
 #endif
 
-//#define AP_CONTROL_CLK       1
 #define  USE_PLATFORM_BUS     1
-//#define  USE_SPI_BUS	1
-//#define GF_FASYNC   1	/*If support fasync mechanism.*/
 #define GF_NETLINK_ENABLE 1
 #define GF_NET_EVENT_FB_BLACK 2
 #define GF_NET_EVENT_FB_UNBLACK 3
 #define NETLINK_TEST 25
 
 enum NETLINK_CMD {
-    GF_NET_EVENT_TEST = 0,
-    GF_NET_EVENT_IRQ = 1,
-    GF_NET_EVENT_SCR_OFF,
-    GF_NET_EVENT_SCR_ON,
-    GF_NET_EVENT_TP_TOUCHDOWN,
-    GF_NET_EVENT_TP_TOUCHUP,
-    GF_NET_EVENT_UI_READY,
-    GF_NET_EVENT_MAX,
+	GF_NET_EVENT_TEST = 0,
+	GF_NET_EVENT_IRQ = 1,
+	GF_NET_EVENT_SCR_OFF,
+	GF_NET_EVENT_SCR_ON,
+	GF_NET_EVENT_TP_TOUCHDOWN,
+	GF_NET_EVENT_TP_TOUCHUP,
+	GF_NET_EVENT_UI_READY,
+	GF_NET_EVENT_MAX,
 };
 
 
@@ -153,7 +138,6 @@ struct gf_dev {
 	struct clk *iface_clk;
 
 	struct input_dev *input;
-	/* buffer is NULL unless this device is open (users > 0) */
 	unsigned users;
 	signed irq_gpio;
 	signed reset_gpio;
@@ -168,15 +152,14 @@ struct gf_dev {
 	char device_available;
 	char fb_black;
 
-    /* jinrong add for power */
-    unsigned power_num;
-    fp_power_info_t pwr_list[FP_MAX_PWR_LIST_LEN];
-    uint32_t notify_tpinfo_flag;
-    uint32_t ftm_poweroff_flag;
+	unsigned power_num;
+	fp_power_info_t pwr_list[FP_MAX_PWR_LIST_LEN];
+	uint32_t notify_tpinfo_flag;
+	uint32_t ftm_poweroff_flag;
 };
 
 
-int gf_parse_dts(struct gf_dev* gf_dev);
+int gf_parse_dts(struct gf_dev *gf_dev);
 void gf_cleanup(struct gf_dev *gf_dev);
 
 int gf_power_on(struct gf_dev *gf_dev);
@@ -184,13 +167,14 @@ int gf_power_off(struct gf_dev *gf_dev);
 
 int gf_hw_reset(struct gf_dev *gf_dev, unsigned int delay_ms);
 int gf_irq_num(struct gf_dev *gf_dev);
+int gf_power_reset(struct gf_dev *gf_dev);
 
 void sendnlmsg(char *msg);
 int netlink_init(void);
 void netlink_exit(void);
 
-void gf_cleanup_pwr_list(struct gf_dev* gf_dev);
-int gf_parse_pwr_list(struct gf_dev* gf_dev);
-int gf_parse_ftm_poweroff_flag(struct gf_dev* gf_dev);
+void gf_cleanup_pwr_list(struct gf_dev *gf_dev);
+int gf_parse_pwr_list(struct gf_dev *gf_dev);
+int gf_parse_ftm_poweroff_flag(struct gf_dev *gf_dev);
 
 #endif /*__GF_SPI_H*/

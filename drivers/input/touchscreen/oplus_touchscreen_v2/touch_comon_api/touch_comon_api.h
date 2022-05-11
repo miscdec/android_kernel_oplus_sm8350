@@ -12,7 +12,6 @@
 #include <linux/uaccess.h>
 
 #include "../touchpanel_common.h"
-#include "../touchpanel_healthinfo/touchpanel_healthinfo.h"
 
 /*******Part0:LOG TAG Declear************************/
 extern unsigned int tp_debug;
@@ -26,34 +25,34 @@ extern unsigned int tp_debug;
 #endif
 
 #define TPD_INFO(a, arg...)  pr_err("[TP]"TPD_DEVICE ": " a, ##arg)
-#define TP_INFO(index, a, arg...)  pr_err("[TP]"TPD_DEVICE"%x" ": " a, index, ##arg)
+#define TP_INFO(index, a, arg...)  pr_err("[TP""%x""]"TPD_DEVICE": " a, index, ##arg)
 
 #define TPD_DEBUG(a, arg...)\
-	do{\
+	do {\
 		if (LEVEL_DEBUG == tp_debug)\
 		pr_err("[TP]"TPD_DEVICE ": " a, ##arg);\
 	}while(0)
 
 #define TP_DEBUG(index, a, arg...)\
-			do{\
+			do {\
 				if (LEVEL_DEBUG == tp_debug)\
-					pr_err("[TP]"TPD_DEVICE"%x"": " a, index, ##arg);\
+					pr_err("[TP""%x""]"TPD_DEVICE": " a, index, ##arg);\
 			}while(0)
 
 #define TPD_DETAIL(a, arg...)\
-	do{\
+	do {\
 		if (LEVEL_BASIC != tp_debug)\
 			pr_err("[TP]"TPD_DEVICE ": " a, ##arg);\
 	}while(0)
 
 #define TP_DETAIL(index, a, arg...)\
-			do{\
+			do {\
 				if (LEVEL_BASIC != tp_debug)\
-					pr_err("[TP]"TPD_DEVICE"%x"": " a, index, ##arg);\
+					pr_err("[TP""%x""]"TPD_DEVICE": " a, index, ##arg);\
 			}while(0)
 
 #define TPD_SPECIFIC_PRINT(count, a, arg...)\
-	do{\
+	do {\
 		if (count++ == TPD_PRINT_POINT_NUM || LEVEL_DEBUG == tp_debug) {\
 			TPD_INFO(TPD_DEVICE ": " a, ##arg);\
 			count = 0;\
@@ -61,7 +60,7 @@ extern unsigned int tp_debug;
 	}while(0)
 
 #define TP_SPECIFIC_PRINT(index, count, a, arg...)\
-			do{\
+			do {\
 				if (count++ == TPD_PRINT_POINT_NUM || LEVEL_DEBUG == tp_debug) {\
 					TPD_INFO(TPD_DEVICE"%x"": " a, index, ##arg);\
 					count = 0;\
@@ -69,7 +68,7 @@ extern unsigned int tp_debug;
 			}while(0)
 
 #define TPD_DEBUG_NTAG(a, arg...)\
-			do{\
+			do {\
 				if (tp_debug)\
 					printk(a, ##arg);\
 			}while(0)
@@ -230,22 +229,11 @@ static inline int tp_alloc_mem(struct tp_buffer *buffer, unsigned int size)
 static inline void *tp_devm_kzalloc(struct device *dev, size_t size, gfp_t gfp)
 {
 	void *p;
-	struct touchpanel_data *ts = dev_get_drvdata(dev);
 
 	p = devm_kzalloc(dev, size, gfp);
 
 	if (!p) {
 		TPD_INFO("%s: Failed to allocate memory\n", __func__);
-
-		/*add for health monitor*/
-		if (ts->health_monitor_support) {
-			tp_healthinfo_report(&ts->monitor_data, HEALTH_ALLOC_FAILED, &size);
-		}
-
-	} else {
-		if (ts->health_monitor_support) {
-			tp_healthinfo_report(&ts->monitor_data, HEALTH_ALLOC_SUCCESS, &size);
-		}
 	}
 
 	return p;
@@ -253,16 +241,9 @@ static inline void *tp_devm_kzalloc(struct device *dev, size_t size, gfp_t gfp)
 
 static inline void tp_devm_kfree(struct device *dev, void **mem, size_t size)
 {
-	long size_minus = -size;
-	struct touchpanel_data *ts = dev_get_drvdata(dev);
-
 	if (*mem != NULL) {
 		devm_kfree(dev, *mem);
 		*mem = NULL;
-
-		if (ts->health_monitor_support) {
-			tp_healthinfo_report(&ts->monitor_data, HEALTH_ALLOC_SUCCESS, &size_minus);
-		}
 	}
 }
 
@@ -352,7 +333,7 @@ static inline unsigned long tp_copy_from_user(void *to, unsigned long dest_size,
 
 	if (src_size > dest_size) {
 		TPD_INFO("%s:dest_size = %lu, src_size = %lu\n",
-			 __func__, MaxCount, src_size);
+			 __func__, dest_size, src_size);
 		return src_size;
 	}
 
