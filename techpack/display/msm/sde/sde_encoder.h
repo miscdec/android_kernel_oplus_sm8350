@@ -281,6 +281,26 @@ struct sde_encoder_virt {
 #endif
 };
 
+#ifdef OPLUS_BUG_STABILITY
+/**
+ * @g_pri_bk_level: global backlight of the primary screen
+ * @g_sec_bk_level: global backlight of the secondary screen
+ * @g_save_pcc: global pcc save for debug
+ */
+struct oplus_apollo_bk {
+	u32 g_pri_bk_level;
+	u32 g_sec_bk_level;
+};
+
+enum oplus_sync_method {
+	OPLUS_PREPARE_KICKOFF_METHOD = 0,
+	OPLUS_KICKOFF_METHOD,
+	OPLUS_POST_KICKOFF_METHOD,
+	OPLUS_WAIT_VSYNC_METHOD,
+	OPLUS_UNKNOW_METHOD,
+};
+#endif /* OPLUS_BUG_STABILITY */
+
 #define to_sde_encoder_virt(x) container_of(x, struct sde_encoder_virt, base)
 
 /**

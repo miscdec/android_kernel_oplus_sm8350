@@ -1,11 +1,11 @@
 /***************************************************************
 ** Copyright (C),  2021,  oplus Mobile Comm Corp.,  Ltd
-** VENDOR_EDIT
+**
 ** File : oplus_dc_diming.h
 ** Description : oplus esd feature
 ** Version : 1.0
 ** Date : 2020/04/15
-** Author : XXXXXXX@MM.Display.LCD Driver
+** Author :
 **
 ** ------------------------------- Revision History: -----------
 **  <author>        <data>        <version >        <desc>

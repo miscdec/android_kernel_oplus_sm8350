@@ -447,6 +447,7 @@ static int iris_cm_csc_para_set(struct iris_update_ipopt *popt, uint8_t skip_las
 	opt_id = 0x40;
 	psopt = iris_find_ip_opt(ip, opt_id);
 	if (psopt == NULL) {
+		IRIS_LOGE("can not find ip = %02x opt_id = %02x", ip, opt_id);
 		return 1;
 	}
 
@@ -491,6 +492,7 @@ void iris_cm_csc_level_set(u32 csc_ip, u32 *csc_value)
 	is_ulps_enable = iris_disable_ulps(path);
 	iris_update_pq_opt(popt, len, path);
 	iris_enable_ulps(path, is_ulps_enable);
+	IRIS_LOGD("%s csc len=%d", (csc_ip == IRIS_IP_DPP) ? "dpp" : "cm", len);
 }
 
 void iris_cm_6axis_level_set(u32 level)
@@ -2764,6 +2766,7 @@ static int iris_brightness_para_set(struct iris_update_ipopt *popt, uint8_t skip
 	opt_id = 0x40;
 	psopt = iris_find_ip_opt(ip, opt_id);
 	if (psopt == NULL) {
+		IRIS_LOGE("can not find ip = %02x opt_id = %02x", ip, opt_id);
 		return 1;
 	}
 

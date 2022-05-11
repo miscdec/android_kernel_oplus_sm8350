@@ -1,11 +1,11 @@
 /***************************************************************
 ** Copyright (C),  2018,  OPLUS Mobile Comm Corp.,  Ltd
-** VENDOR_EDIT
+**
 ** File : oplus_dsi_support.h
 ** Description : display driver private management
 ** Version : 1.0
 ** Date : 2018/03/17
-** Author : Jie.Hu@PSW.MM.Display.Stability
+** Author :
 **
 ** ------------------------------- Revision History: -----------
 **  <author>        <data>        <version >        <desc>
@@ -27,7 +27,7 @@
 
 enum oplus_display_support_list {
 	OPLUS_SAMSUNG_ANA6706_DISPLAY_FHD_DSC_CMD_PANEL = 0,
-	OPLUS_SAMSUNG_ONEPLUS_DISPLAY_FHD_DSC_CMD_PANEL,
+	OPLUS_SAMSUNG_DISPLAY_FHD_DSC_CMD_PANEL,
 	OPLUS_DISPLAY_UNKNOW,
 };
 
@@ -58,16 +58,6 @@ enum oplus_display_feature {
 	OPLUS_DISPLAY_DYNAMIC_MIPI,
 	OPLUS_DISPLAY_PARTIAL_UPDATE,
 	OPLUS_DISPLAY_FEATURE_MAX,
-};
-
-enum oplus_display_cabc_status {
-	OPLUS_DISPLAY_CABC_OFF = 0,
-	OPLUS_DISPLAY_CABC_UI,
-	OPLUS_DISPLAY_CABC_IMAGE,
-	OPLUS_DISPLAY_CABC_VIDEO,
-	OPLUS_DISPLAY_CABC_UNLOCK = 8,
-	OPLUS_DISPLAY_CABC_LOCK = 9,
-	OPLUS_DISPLAY_CABC_UNKNOW,
 };
 
 typedef struct panel_serial_info {

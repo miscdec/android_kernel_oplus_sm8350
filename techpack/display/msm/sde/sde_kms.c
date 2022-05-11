@@ -996,9 +996,11 @@ static void _sde_kms_drm_check_dpms(struct drm_atomic_state *old_state,
 			notifier_data.refresh_rate = new_fps;
 			notifier_data.id = connector->base.id;
 
+#ifndef OPLUS_BUG_STABILITY
 			if (connector->panel)
 				drm_panel_notifier_call_chain(connector->panel,
 							event, &notifier_data);
+#endif
 		}
 	}
 
@@ -1154,12 +1156,10 @@ static void sde_kms_prepare_commit(struct msm_kms *kms,
 	SDE_ATRACE_BEGIN("prepare_commit");
 	rc = pm_runtime_get_sync(sde_kms->dev->dev);
 	if (rc < 0) {
-#ifdef CONFIG_OPLUS_FEATURE_MM_FEEDBACK
-		SDE_MM_ERROR("failed to enable power resources %d\n", rc);
-
-#else
 		SDE_ERROR("failed to enable power resources %d\n", rc);
-#endif /* CONFIG_OPLUS_FEATURE_MM_FEEDBACK */
+		#ifdef OPLUS_BUG_STABILITY
+		SDE_MM_ERROR("failed to enable power resources %d\n", rc);
+		#endif /* OPLUS_BUG_STABILITY */
 		SDE_EVT32(rc, SDE_EVTLOG_ERROR);
 		goto end;
 	}
@@ -1786,7 +1786,6 @@ static int _sde_kms_setup_displays(struct drm_device *dev,
 		.set_allowed_mode_switch = dsi_conn_set_allowed_mode_switch,
 		.get_qsync_min_fps = dsi_display_get_qsync_min_fps,
 #ifdef OPLUS_BUG_STABILITY
-		// enable qsync on/off cmds
 		.prepare_commit = dsi_display_pre_commit,
 #else
 		.prepare_commit = dsi_conn_prepare_commit,

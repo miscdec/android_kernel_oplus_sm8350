@@ -1,11 +1,11 @@
 /***************************************************************
 ** Copyright (C) 2018-2020 OPLUS. All rights reserved.
-** VENDOR_EDIT
+**
 ** File : oplus_adfr.h
 ** Description : ADFR kernel module
 ** Version : 1.0
 ** Date : 2020/10/23
-** Author : CaiHuiyue@MM.Display
+** Author :
 **
 ** ------------------------------- Revision History: -----------
 **  <author>        <data>        <version >        <desc>
@@ -49,9 +49,14 @@
 #define OPLUS_ADFR_AUTO_MIN_FPS_MAGIC 0X00000080
 #define OPLUS_ADFR_AUTO_MIN_FPS_VALUE(auto_value) ((auto_value)&0X0000007F)
 
-#define SDC_AUTO_MIN_FPS_CMD_OFFSET 2
-#define SDC_MANUAL_MIN_FPS_CMD_OFFSET 1
-#define SDC_MIN_FPS_CMD_SIZE 2
+#define SDC_AUTO_MIN_FPS_CMD_OFFSET_AMB670YF01 2
+#define SDC_AUTO_MIN_FPS_CMD_OFFSET_AMF710ZC01 2
+#define SDC_MANUAL_MIN_FPS_CMD_OFFSET_AMB670YF01 1
+#define SDC_MANUAL_MIN_FPS_CMD_OFFSET_AMF710ZC01_0 2
+#define SDC_MANUAL_MIN_FPS_CMD_OFFSET_AMF710ZC01_1 3
+#define SDC_MIN_FPS_CMD_SIZE_AMB670YF01 2
+#define SDC_MIN_FPS_CMD_SIZE_AMF710ZC01_0 2
+#define SDC_MIN_FPS_CMD_SIZE_AMF710ZC01_1 3
 
 #define to_dsi_bridge(x)  container_of((x), struct dsi_bridge, base)
 
@@ -507,7 +512,6 @@ int oplus_adfr_adjust_tearcheck_for_dynamic_qsync(void *sde_phys_enc)
 }
 
 /* --------------- dsi_connector ---------------*/
-
 int sde_connector_send_fakeframe(void *conn)
 {
 	struct drm_connector *connector = conn;
@@ -1675,6 +1679,10 @@ static int dsi_panel_send_auto_minfps_dcs(struct dsi_panel *panel,
 	u8 *tx_buf;
 	u32 count;
 	int k = 0;
+	u32 offset_0 = 0;
+	u32 offset_1 = 0;
+	u32 size_0 = 0;
+	u32 size_1 = 0;
 
 	/* SDC's auto, fakeframe and minfps are available only after power on */
 	if (get_oplus_display_power_status() != OPLUS_DISPLAY_POWER_ON) {
@@ -1704,20 +1712,48 @@ static int dsi_panel_send_auto_minfps_dcs(struct dsi_panel *panel,
 			goto exit;
 		}
 
-		if (count <= SDC_MANUAL_MIN_FPS_CMD_OFFSET) {
+		if(!strcmp(panel->oplus_priv.vendor_name, "AMB670YF01")
+				|| !strcmp(panel->oplus_priv.vendor_name, "S6E3HC3")) {
+			offset_0 = SDC_MANUAL_MIN_FPS_CMD_OFFSET_AMB670YF01;
+			size_0 = SDC_MIN_FPS_CMD_SIZE_AMB670YF01;
+		}
+
+		if (!strcmp(panel->oplus_priv.vendor_name, "S6E3XA1")) {
+			offset_0 = SDC_MANUAL_MIN_FPS_CMD_OFFSET_AMF710ZC01_0;
+			size_0 = SDC_MIN_FPS_CMD_SIZE_AMF710ZC01_0;
+			offset_1 = SDC_MANUAL_MIN_FPS_CMD_OFFSET_AMF710ZC01_1;
+			size_1 = SDC_MIN_FPS_CMD_SIZE_AMF710ZC01_1;
+		}
+
+		if (count <= offset_0) {
 			DSI_ERR("kVRR [%s] No commands to be sent for manual min fps, wrong cmds count.\n", panel->name);
 			goto exit;
 		}
 
 		/*update manual min fps*/
-		tx_len = cmds[SDC_MANUAL_MIN_FPS_CMD_OFFSET].msg.tx_len;
-		tx_buf = (u8 *)cmds[SDC_MANUAL_MIN_FPS_CMD_OFFSET].msg.tx_buf;
-		if (tx_len != SDC_MIN_FPS_CMD_SIZE) {
+		tx_len = cmds[offset_0].msg.tx_len;
+		tx_buf = (u8 *)cmds[offset_0].msg.tx_buf;
+		if (tx_len != size_0) {
 			DSI_ERR("kVRR [%s] No commands to be sent for manual min fps, wrong cmds size %u.\n", panel->name, tx_len);
 			goto exit;
 		}
+		tx_buf[size_0-1] = extend_frame;
 
-		tx_buf[SDC_MIN_FPS_CMD_SIZE-1] = extend_frame;
+		if (!strcmp(panel->oplus_priv.vendor_name, "S6E3XA1")) {
+			if (count <= offset_1) {
+				DSI_ERR("kVRR [%s] No commands to be sent for manual min fps, wrong cmds count.\n", panel->name);
+				goto exit;
+			}
+
+			tx_len = cmds[offset_1].msg.tx_len;
+			tx_buf = (u8 *)cmds[offset_1].msg.tx_buf;
+			if (tx_len != size_1) {
+				DSI_ERR("kVRR [%s] No commands to be sent for manual min fps, wrong cmds size %u.\n", panel->name, tx_len);
+				goto exit;
+			}
+			tx_buf[size_1-1] = extend_frame;
+		}
+
 		DSI_INFO("kVRR send manual min fps %u .\n", extend_frame);
 		for (k = 0; k < tx_len; k++) {
 			DSI_DEBUG("kVRR manual min fps %02x", tx_buf[k]);
@@ -1738,19 +1774,32 @@ static int dsi_panel_send_auto_minfps_dcs(struct dsi_panel *panel,
 			goto exit;
 		}
 
-		if (count <= SDC_AUTO_MIN_FPS_CMD_OFFSET) {
+		if(!strcmp(panel->oplus_priv.vendor_name, "AMB670YF01")
+				|| !strcmp(panel->oplus_priv.vendor_name, "S6E3HC3")) {
+			offset_0 = SDC_AUTO_MIN_FPS_CMD_OFFSET_AMB670YF01;
+			size_0 = SDC_MIN_FPS_CMD_SIZE_AMB670YF01;
+		}
+
+		if(!strcmp(panel->oplus_priv.vendor_name, "S6E3XA1")) {
+			offset_0 = SDC_AUTO_MIN_FPS_CMD_OFFSET_AMF710ZC01;
+			size_0 = SDC_MIN_FPS_CMD_SIZE_AMF710ZC01_0;
+		}
+
+		if (count <= offset_0) {
 			DSI_ERR("kVRR [%s] No commands to be sent for auto min fps, wrong cmds count.\n", panel->name);
 			goto exit;
 		}
+
 		/*update auto min fps*/
-		tx_len = cmds[SDC_AUTO_MIN_FPS_CMD_OFFSET].msg.tx_len;
-		tx_buf = (u8 *)cmds[SDC_AUTO_MIN_FPS_CMD_OFFSET].msg.tx_buf;
-		if (tx_len != SDC_MIN_FPS_CMD_SIZE) {
+		tx_len = cmds[offset_0].msg.tx_len;
+		tx_buf = (u8 *)cmds[offset_0].msg.tx_buf;
+		if (tx_len != size_0) {
 			DSI_ERR("kVRR [%s] No commands to be sent for auto min fps, wrong cmds size %u.\n", panel->name, tx_len);
 			goto exit;
 		}
 
-		tx_buf[SDC_MIN_FPS_CMD_SIZE-1] = extend_frame;
+		tx_buf[size_0-1] = extend_frame;
+
 		DSI_INFO("kVRR send auto min fps %u .\n", extend_frame);
 		for (k = 0; k < tx_len; k++) {
 			DSI_DEBUG("kVRR auto min fps %02x", tx_buf[k]);

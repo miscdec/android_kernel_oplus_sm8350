@@ -1,11 +1,11 @@
 /***************************************************************
 ** Copyright (C),  2020,  OPLUS Mobile Comm Corp.,  Ltd
-** VENDOR_EDIT
+**
 ** File : oplus_bl.h
 ** Description : oplus display backlight
 ** Version : 1.0
 ** Date : 2020/10/23
-** Author : LiPing-M@PSW.MM.Display.Stability
+** Author :
 **
 ** ------------------------------- Revision History: -----------
 **  <author>        <data>        <version >        <desc>

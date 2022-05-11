@@ -1,11 +1,11 @@
 /***************************************************************
 ** Copyright (C),  2020,  OPLUS Mobile Comm Corp.,  Ltd
-** VENDOR_EDIT
+**
 ** File : oplus_display_panel_hbm.c
 ** Description : oplus display panel hbm feature
 ** Version : 1.0
 ** Date : 2020/07/06
-** Author : Li.Sheng@MULTIMEDIA.DISPLAY.LCD
+** Author :
 **
 ** ------------------------------- Revision History: -----------
 **  <author>		<data>		<version >		<desc>
@@ -203,6 +203,11 @@ int dsi_display_hbm_off(struct dsi_display *display)
 		(!strcmp(display->panel->oplus_priv.vendor_name, "AMB670YF01"))) {
 		rc = dsi_panel_tx_cmd_set(display->panel, DSI_CMD_HBM_OFF);
 		dsi_panel_set_backlight(display->panel, display->panel->bl_config.bl_level);
+	} else if (!strcmp(display->panel->oplus_priv.vendor_name, "AMS662ZS01")) {
+		dsi_panel_set_backlight(display->panel, display->panel->bl_config.bl_level);
+		mutex_lock(&display->panel->panel_lock);
+		rc = dsi_panel_tx_cmd_set(display->panel, DSI_CMD_HBM_OFF);
+		mutex_unlock(&display->panel->panel_lock);
 	} else {
 		dsi_panel_set_backlight(display->panel, display->panel->bl_config.bl_level);
 		rc = dsi_panel_tx_cmd_set(display->panel, DSI_CMD_HBM_OFF);
@@ -301,3 +306,4 @@ int oplus_display_panel_get_hbm(void *buf)
 
 	return 0;
 }
+

@@ -1,11 +1,11 @@
 /***************************************************************
 ** Copyright (C),  2020,  OPLUS Mobile Comm Corp.,  Ltd
-** VENDOR_EDIT
+**
 ** File : oplus_ffl.c
 ** Description : oplus ffl feature
 ** Version : 1.0
 ** Date : 2020/04/23
-** Author : Qianxu@MM.Display.LCD Driver
+** Author :
 **
 ** ------------------------------- Revision History: -----------
 **  <author>        <data>        <version >        <desc>
@@ -16,8 +16,6 @@
 #include "dsi_display.h"
 #include "oplus_dsi_support.h"
 #include "oplus_onscreenfingerprint.h"
-/*#include "oplus_mm_kevent_fb.h"*/
-
 
 #define FFL_LEVEL_START 2
 #define FFL_LEVEL_END  236

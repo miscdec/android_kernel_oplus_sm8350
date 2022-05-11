@@ -34,11 +34,14 @@
 #ifdef OPLUS_BUG_STABILITY
 #include "sde_trace.h"
 
-extern u32 g_new_bk_level;
+extern struct oplus_apollo_bk apollo_bk;
 extern int backlight_smooth_enable;
 static DEFINE_SPINLOCK(g_bk_lock);
 #endif
 
+#ifdef OPLUS_BUG_STABILITY
+#define MSM_BOOT_MODE_FACTORY 3
+#endif
 
 #define BL_NODE_NAME_SIZE 32
 #define HDR10_PLUS_VSIF_TYPE_CODE      0x81
@@ -114,11 +117,15 @@ static inline struct sde_kms *_sde_connector_get_kms(struct drm_connector *conn)
 	return to_sde_kms(priv->kms);
 }
 
-//#ifdef OPLUS_BUG_STABILITY
 static u32 dither_matrix[DITHER_MATRIX_SZ] = {
 	15, 7, 13, 5, 3, 11, 1, 9, 12, 4, 14, 6, 0, 8, 2, 10
 };
-//#endif
+
+#ifdef OPLUS_BUG_STABILITY
+extern bool is_spread_backlight(struct dsi_display *display, int level);
+extern void update_pending_backlight(struct dsi_display *display, int level);
+extern int get_boot_mode(void);
+#endif
 
 static int sde_backlight_device_update_status(struct backlight_device *bd)
 {
@@ -209,8 +216,11 @@ static int sde_backlight_device_update_status(struct backlight_device *bd)
 	vm_ops = sde_vm_get_ops(sde_kms);
 	if (vm_ops && vm_ops->vm_owns_hw && !vm_ops->vm_owns_hw(sde_kms)) {
 		SDE_DEBUG("skipping bl update due to HW unavailablity\n");
-		goto done;
+		sde_vm_unlock(sde_kms);
+		return rc;
 	}
+
+	sde_vm_unlock(sde_kms);
 
 #ifndef OPLUS_BUG_STABILITY
 	if (c_conn->ops.set_backlight) {
@@ -222,7 +232,7 @@ static int sde_backlight_device_update_status(struct backlight_device *bd)
 				c_conn->base.dev, &event, (u8 *)&brightness);
 		}
 		rc = c_conn->ops.set_backlight(&c_conn->base,
-			c_conn->display, bl_lvl);
+				c_conn->display, bl_lvl);
 		c_conn->unset_bl_level = 0;
 	}
 #else
@@ -235,29 +245,27 @@ static int sde_backlight_device_update_status(struct backlight_device *bd)
 				c_conn->base.dev, &event, (u8 *)&brightness);
 		}
 
-	if ((!strcmp(display->panel->oplus_priv.vendor_name, "S6E3HC3")) && backlight_smooth_enable){
-			if((bl_lvl >= 2)&&( bl_lvl <= 200)) {
+		if (display->panel->oplus_priv.is_apollo_support && backlight_smooth_enable) {
+			if ((MSM_BOOT_MODE_FACTORY != get_boot_mode()) && (is_spread_backlight(display, bl_lvl))) {
 				spin_lock(&g_bk_lock);
-				g_new_bk_level = bl_lvl;
+				update_pending_backlight(display, bl_lvl);
 				spin_unlock(&g_bk_lock);
 			} else {
 				spin_lock(&g_bk_lock);
-				g_new_bk_level = bl_lvl;
+				update_pending_backlight(display, bl_lvl);
 				spin_unlock(&g_bk_lock);
 				rc = c_conn->ops.set_backlight(&c_conn->base,
 				c_conn->display, bl_lvl);
 				c_conn->unset_bl_level = 0;
 			}
-	} else {
-				rc = c_conn->ops.set_backlight(&c_conn->base,
-				c_conn->display, bl_lvl);
-				c_conn->unset_bl_level = 0;
-			}
+		} else {
+			rc = c_conn->ops.set_backlight(&c_conn->base,
+			c_conn->display, bl_lvl);
+			c_conn->unset_bl_level = 0;
+		}
 	}
 #endif
 
-done:
-	sde_vm_unlock(sde_kms);
 #ifdef OPLUS_BUG_STABILITY
 	SDE_ATRACE_END("debug_io_issue_for_backlight_smooth");
 #endif
@@ -322,7 +330,7 @@ static int sde_backlight_setup(struct sde_connector *c_conn,
 	props.brightness = bl_config->brightness_max_level;
 #else
 	props.brightness = bl_config->brightness_default_level;
-#endif  /*VENDOR_EDIT*/
+#endif
 	snprintf(bl_node_name, BL_NODE_NAME_SIZE, "panel%u-backlight",
 							display_count);
 	c_conn->bl_device = backlight_device_register(bl_node_name, dev->dev,
@@ -436,7 +444,6 @@ void sde_connector_unregister_event(struct drm_connector *connector,
 	(void)sde_connector_register_event(connector, event_idx, 0, 0);
 }
 
-//#ifdef OPLUS_BUG_STABILITY
 static int _sde_connector_get_default_dither_cfg_v1(
 		struct sde_connector *c_conn, void *cfg)
 {
@@ -489,12 +496,10 @@ static void _sde_connector_install_dither_property(struct drm_device *dev,
 	struct sde_mdss_cfg *catalog = NULL;
 	u32 version = 0;
 	void *cfg;
-//#ifdef OPLUS_BUG_STABILITY
 	struct drm_property_blob *blob_ptr;
 	int ret = 0;
   	u32 len = 0;
   	bool defalut_dither_needed = false;
-//#endif
 
 	if (!dev || !sde_kms || !c_conn) {
 		SDE_ERROR("invld args (s), dev %pK, sde_kms %pK, c_conn %pK\n",
@@ -513,7 +518,6 @@ static void _sde_connector_install_dither_property(struct drm_device *dev,
 		msm_property_install_blob(&c_conn->property_info, prop_name,
 			DRM_MODE_PROP_BLOB,
 			CONNECTOR_PROP_PP_DITHER);
-		//#ifdef OPLUS_BUG_STABILITY
 		len = sizeof(struct drm_msm_dither);
 		cfg = kzalloc(len, GFP_KERNEL);
 		if (!cfg)
@@ -522,13 +526,11 @@ static void _sde_connector_install_dither_property(struct drm_device *dev,
 		ret = _sde_connector_get_default_dither_cfg_v1(c_conn, cfg);
 		if (!ret)
 			defalut_dither_needed = true;
-		//#endif
 		break;
 	default:
 		SDE_ERROR("unsupported dither version %d\n", version);
 		return;
 	}
-	//#ifdef OPLUS_BUG_STABILITY
 	if (defalut_dither_needed) {
 		blob_ptr = drm_property_create_blob(dev, len, cfg);
 		if (IS_ERR_OR_NULL(blob_ptr))
@@ -537,7 +539,6 @@ static void _sde_connector_install_dither_property(struct drm_device *dev,
 	}
 exit:
 	kfree(cfg);
-	//#endif
 }
 
 int sde_connector_get_dither_cfg(struct drm_connector *conn,
@@ -556,7 +557,6 @@ int sde_connector_get_dither_cfg(struct drm_connector *conn,
 
 	c_conn = to_sde_connector(conn);
 	c_state = to_sde_connector_state(state);
-//#ifdef OPLUS_BUG_STABILITY
 	/* try to get user config data first */
   	*cfg = msm_property_get_blob(&c_conn->property_info,
   					&c_state->property_state,
@@ -568,7 +568,6 @@ int sde_connector_get_dither_cfg(struct drm_connector *conn,
   		dither_sz = c_conn->blob_dither->length;
   	}
   	*len = dither_sz;
-//#endif
 	return 0;
 }
 
@@ -816,7 +815,7 @@ static int _sde_connector_update_bl_scale(struct sde_connector *c_conn)
 
 #ifdef OPLUS_BUG_STABILITY
 	struct backlight_device *bd;
-#endif /* OPLUS_BUG_STABILITY */
+#endif
 
 	if (!c_conn) {
 		SDE_ERROR("Invalid params sde_connector null\n");
@@ -839,7 +838,7 @@ static int _sde_connector_update_bl_scale(struct sde_connector *c_conn)
 	}
 
 	mutex_lock(&bd->update_lock);
-#endif /* OPLUS_BUG_STABILITY */
+#endif
 
 	bl_config = &dsi_display->panel->bl_config;
 
@@ -847,7 +846,7 @@ static int _sde_connector_update_bl_scale(struct sde_connector *c_conn)
 		c_conn->unset_bl_level = bl_config->bl_level;
 #ifdef OPLUS_BUG_STABILITY
 		mutex_unlock(&bd->update_lock);
-#endif /* OPLUS_BUG_STABILITY */
+#endif
 		return 0;
 	}
 
@@ -868,7 +867,7 @@ static int _sde_connector_update_bl_scale(struct sde_connector *c_conn)
 
 #ifdef OPLUS_BUG_STABILITY
 	mutex_unlock(&bd->update_lock);
-#endif /* OPLUS_BUG_STABILITY */
+#endif
 
 	return rc;
 }
@@ -1111,12 +1110,13 @@ int sde_connector_pre_kickoff(struct drm_connector *connector)
 	if (c_conn->connector_type == DRM_MODE_CONNECTOR_DSI) {
 		display = (struct dsi_display *)c_conn->display;
 		if(display && display->panel && display->panel->oplus_priv.vendor_name) {
-			if ((!strcmp(display->panel->oplus_priv.vendor_name, "AMB655X")) || (!strcmp(display->panel->oplus_priv.vendor_name, "AMB670YF01"))) {
+			if ((!strcmp(display->panel->oplus_priv.vendor_name, "AMB655X")) || (!strcmp(display->panel->oplus_priv.vendor_name, "AMB670YF01")) ||
+				(!strcmp(display->panel->oplus_priv.vendor_name, "AMS662ZS01"))) {
 				rc = sde_connector_update_hbm(connector);
 			}
 		}
 	}
-#endif /* OPLUS_BUG_STABILITY */
+#endif
 	if (rc) {
 		SDE_EVT32(connector->base.id, SDE_EVTLOG_ERROR);
 		goto end;
@@ -2582,7 +2582,6 @@ static int sde_connector_fill_modes(struct drm_connector *connector,
 
 #ifdef OPLUS_BUG_STABILITY
 	if (oplus_adfr_is_support() && (mode_count == 15)) {
-		//only 19815 have 15 timing
 		drm_mode_sort_for_adfr(&connector->modes);
 	}
 #endif
@@ -2734,9 +2733,6 @@ static int sde_connector_atomic_check(struct drm_connector *connector,
 	return 0;
 }
 
-#ifdef OPLUS_BUG_STABILITY
-extern void set_esd_check_happened(int val);
-#endif /* OPLUS_BUG_STABILITY */
 static void _sde_connector_report_panel_dead(struct sde_connector *conn,
 	bool skip_pre_kickoff)
 {
@@ -2752,10 +2748,6 @@ static void _sde_connector_report_panel_dead(struct sde_connector *conn,
 	 */
 	if (conn->panel_dead)
 		return;
-
-#ifdef OPLUS_BUG_STABILITY
-	set_esd_check_happened(1);
-#endif /* OPLUS_BUG_STABILITY */
 
 	SDE_EVT32(SDE_EVTLOG_ERROR);
 	sde_encoder_display_failure_notification(conn->encoder,

@@ -504,6 +504,9 @@ static void _sde_dump_reg(const char *dump_name, u32 reg_dump_flag,
 	pr_debug("%s: reg_dump_flag=%d in_log=%d in_mem=%d\n",
 		dump_name, reg_dump_flag, in_log, in_mem);
 
+	if (!dbg_base->reg_dump_addr)
+		in_mem = 0;
+
 	if (!in_log && !in_mem)
 		return;
 
@@ -711,12 +714,15 @@ static void _sde_dump_reg_by_ranges(struct sde_dbg_reg_base *dbg,
 				addr, range_node->offset.start,
 				range_node->offset.end);
 
-			scnprintf(dbg_base->reg_dump_addr, REG_BASE_NAME_LEN,
-					dbg->name);
-			dbg_base->reg_dump_addr += REG_BASE_NAME_LEN;
-			scnprintf(dbg_base->reg_dump_addr, RANGE_NAME_LEN,
-					range_node->range_name);
-			dbg_base->reg_dump_addr += RANGE_NAME_LEN;
+			if (dbg_base->reg_dump_addr) {
+				scnprintf(dbg_base->reg_dump_addr, REG_BASE_NAME_LEN,
+						dbg->name);
+				dbg_base->reg_dump_addr += REG_BASE_NAME_LEN;
+				scnprintf(dbg_base->reg_dump_addr, RANGE_NAME_LEN,
+						range_node->range_name);
+				dbg_base->reg_dump_addr += RANGE_NAME_LEN;
+			}
+
 			_sde_dump_reg(range_node->range_name, reg_dump_flag,
 					dbg->base, addr, len,
 					&range_node->reg_dump);
@@ -729,10 +735,12 @@ static void _sde_dump_reg_by_ranges(struct sde_dbg_reg_base *dbg,
 				dbg->max_offset);
 		addr = dbg->base;
 		len = dbg->max_offset;
-		scnprintf(dbg_base->reg_dump_addr, REG_BASE_NAME_LEN,
-				dbg->name);
-		dbg_base->reg_dump_addr += REG_BASE_NAME_LEN;
-		dbg_base->reg_dump_addr += RANGE_NAME_LEN;
+		if (dbg_base->reg_dump_addr) {
+			scnprintf(dbg_base->reg_dump_addr, REG_BASE_NAME_LEN,
+					dbg->name);
+			dbg_base->reg_dump_addr += REG_BASE_NAME_LEN;
+			dbg_base->reg_dump_addr += RANGE_NAME_LEN;
+		}
 		_sde_dump_reg(dbg->name, reg_dump_flag, dbg->base, addr, len,
 				&dbg->reg_dump);
 	}
@@ -1352,6 +1360,10 @@ static void _sde_dump_array(struct sde_dbg_reg_base *blk_arr[],
 	dbg_base->reg_dump_addr = devm_kzalloc(sde_dbg_base.dev,
 			reg_dump_size, GFP_KERNEL);
 
+	if (!dbg_base->reg_dump_addr)
+		pr_err("Failed to allocate memory for reg_dump_addr size:%d\n",
+			reg_dump_size);
+
 	if (dbg_base->reg_dump_addr &&
 			sde_mini_dump_add_region("reg_dump",
 			reg_dump_size, dbg_base->reg_dump_addr) < 0)
@@ -1539,6 +1551,42 @@ void sde_dbg_ctrl(const char *name, ...)
 
 	va_end(args);
 }
+
+#if defined(OPLUS_BUG_STABILITY)
+ssize_t oplus_sde_evtlog_dump_read(struct file *file, char __user *buff,
+		size_t count, loff_t *ppos)
+{
+	ssize_t len = 0;
+	char evtlog_buf[SDE_EVTLOG_BUF_MAX];
+
+	if (!buff || !ppos)
+		return -EINVAL;
+
+	mutex_lock(&sde_dbg_base.mutex);
+	sde_dbg_base.cur_evt_index = 0;
+	sde_dbg_base.evtlog->first = sde_dbg_base.evtlog->curr + 1;
+	sde_dbg_base.evtlog->last =
+		sde_dbg_base.evtlog->first + SDE_EVTLOG_ENTRY;
+
+	len = sde_evtlog_dump_to_buffer(sde_dbg_base.evtlog,
+			evtlog_buf, SDE_EVTLOG_BUF_MAX,
+			!sde_dbg_base.cur_evt_index, true);
+	sde_dbg_base.cur_evt_index++;
+	mutex_unlock(&sde_dbg_base.mutex);
+
+	if (len < 0 || len > count) {
+		pr_err("len is more than user buffer size");
+		return 0;
+	}
+
+	if (copy_to_user(buff, evtlog_buf, len))
+		return -EFAULT;
+	*ppos += len;
+
+	return len;
+}
+EXPORT_SYMBOL(oplus_sde_evtlog_dump_read);
+#endif /*OPLUS_BUG_STABILITY*/
 
 #ifdef CONFIG_DEBUG_FS
 /*

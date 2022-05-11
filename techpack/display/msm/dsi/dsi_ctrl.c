@@ -25,6 +25,10 @@
 #include "iris/dsi_iris5_api.h"
 #endif
 
+#ifdef OPLUS_BUG_STABILITY
+#include <soc/oplus/system/oplus_mm_kevent_fb.h>
+#endif /* OPLUS_BUG_STABILITY */
+
 #define DSI_CTRL_DEFAULT_LABEL "MDSS DSI CTRL"
 
 #define DSI_CTRL_TX_TO_MS     200
@@ -44,15 +48,14 @@
 #define DSI_CTRL_WARN(c, fmt, ...)	DRM_WARN("[msm-dsi-warn]: %s: " fmt,\
 		c ? c->name : "inv", ##__VA_ARGS__)
 
-#ifdef CONFIG_OPLUS_FEATURE_MM_FEEDBACK
-#include <soc/oplus/system/oplus_mm_kevent_fb.h>
+#ifdef OPLUS_BUG_STABILITY
 #define DSI_CTRL_MM_ERR(c, fmt, ...) \
 	do { \
 		DRM_DEV_ERROR(NULL, "[msm-dsi-error]: %s: "\
 				fmt, c ? c->name : "inv", ##__VA_ARGS__); \
 		mm_fb_display_kevent_named(MM_FB_KEY_RATELIMIT_1H, fmt, ##__VA_ARGS__); \
 	} while(0)
-#endif /* CONFIG_OPLUS_FEATURE_MM_FEEDBACK */
+#endif /* OPLUS_BUG_STABILITY */
 
 struct dsi_ctrl_list_item {
 	struct dsi_ctrl *ctrl;
@@ -434,34 +437,34 @@ static void dsi_ctrl_dma_cmd_wait_for_done(struct work_struct *work)
 					status);
 			DSI_CTRL_WARN(dsi_ctrl,
 					"dma_tx done but irq not triggered\n");
-#ifdef CONFIG_OPLUS_FEATURE_MM_FEEDBACK
-			if (dsi_ctrl->irq_info.irq_num != -1) {
-				struct irq_desc *desc = irq_to_desc(dsi_ctrl->irq_info.irq_num);
-				unsigned long flags;
+#ifdef OPLUS_BUG_STABILITY
+            if (dsi_ctrl->irq_info.irq_num != -1) {
+                struct irq_desc *desc = irq_to_desc(dsi_ctrl->irq_info.irq_num);
+                unsigned long flags;
 
-				if (desc) {
-					spin_lock_irqsave(&dsi_ctrl->irq_info.irq_lock, flags);
-					if (dsi_ctrl->irq_info.irq_stat_mask) {
-						if (desc->depth > 0) {
-							DSI_CTRL_WARN(dsi_ctrl, "dsi_ctrl irq depth[%d] Unexpected, repair it\n",
-								desc->depth);
-							enable_irq(dsi_ctrl->irq_info.irq_num);
-						}
-					}
-					spin_unlock_irqrestore(&dsi_ctrl->irq_info.irq_lock, flags);
-				}
-			}
+                if (desc) {
+                    spin_lock_irqsave(&dsi_ctrl->irq_info.irq_lock, flags);
+                    if (dsi_ctrl->irq_info.irq_stat_mask) {
+                        if (desc->depth > 0) {
+                            DSI_CTRL_WARN(dsi_ctrl, "dsi_ctrl irq depth[%d] Unexpected, repair it\n",
+                                    desc->depth);
+                            enable_irq(dsi_ctrl->irq_info.irq_num);
+                        }
+                    }
+                    spin_unlock_irqrestore(&dsi_ctrl->irq_info.irq_lock, flags);
+                }
+            }
 
-			if (dsi_ctrl->irq_info.irq_stat_refcount[DSI_SINT_CMD_MODE_DMA_DONE] > 1) {
-				DSI_CTRL_WARN(dsi_ctrl, "dsi_ctrl cmd dma done irq stat refcount[%d] Unexpected, repair it\n",
-					dsi_ctrl->irq_info.irq_stat_refcount[DSI_SINT_CMD_MODE_DMA_DONE]);
-				dsi_ctrl_disable_status_interrupt(dsi_ctrl,
-					DSI_SINT_CMD_MODE_DMA_DONE);
+            if (dsi_ctrl->irq_info.irq_stat_refcount[DSI_SINT_CMD_MODE_DMA_DONE] > 1) {
+                DSI_CTRL_WARN(dsi_ctrl, "dsi_ctrl cmd dma done irq stat refcount[%d] Unexpected, repair it\n",
+                            dsi_ctrl->irq_info.irq_stat_refcount[DSI_SINT_CMD_MODE_DMA_DONE]);
+                dsi_ctrl_disable_status_interrupt(dsi_ctrl,
+                        DSI_SINT_CMD_MODE_DMA_DONE);
 
-				mm_fb_display_kevent("dma_tx irq trigger fixup", MM_FB_KEY_RATELIMIT_NONE, "irq status=%x", status);
-			}
-			mm_fb_display_kevent("dma_tx irq trigger err", MM_FB_KEY_RATELIMIT_1H, "irq status=%x", status);
-#endif /* CONFIG_OPLUS_FEATURE_MM_FEEDBACK */
+                mm_fb_display_kevent("dma_tx irq trigger fixup", MM_FB_KEY_RATELIMIT_NONE, "irq status=%x", status);
+            }
+            mm_fb_display_kevent("dma_tx irq trigger err", MM_FB_KEY_RATELIMIT_1H, "irq status=%x", status);
+#endif
 		} else {
 			DSI_CTRL_ERR(dsi_ctrl,
 					"Command transfer failed\n");
@@ -1100,13 +1103,11 @@ static int dsi_ctrl_enable_supplies(struct dsi_ctrl *dsi_ctrl, bool enable)
 	if (enable) {
 		rc = pm_runtime_get_sync(dsi_ctrl->drm_dev->dev);
 		if (rc < 0) {
-#ifdef CONFIG_OPLUS_FEATURE_MM_FEEDBACK
-			DSI_CTRL_MM_ERR(dsi_ctrl, "Power resource enable failed, rc=%d\n", rc);
-
-#else
 			DSI_CTRL_ERR(dsi_ctrl,
 				"Power resource enable failed, rc=%d\n", rc);
-#endif /* CONFIG_OPLUS_FEATURE_MM_FEEDBACK */
+			#ifdef OPLUS_BUG_STABILITY
+			DSI_CTRL_MM_ERR(dsi_ctrl, "Power resource enable failed, rc=%d\n", rc);
+			#endif
 			goto error;
 		}
 
@@ -1114,12 +1115,10 @@ static int dsi_ctrl_enable_supplies(struct dsi_ctrl *dsi_ctrl, bool enable)
 			rc = dsi_pwr_enable_regulator(
 				&dsi_ctrl->pwr_info.host_pwr, true);
 			if (rc) {
-#ifdef CONFIG_OPLUS_FEATURE_MM_FEEDBACK
-				DSI_CTRL_MM_ERR(dsi_ctrl, "failed to enable host power regs\n");
-
-#else
 				DSI_CTRL_ERR(dsi_ctrl, "failed to enable host power regs\n");
-#endif /* CONFIG_OPLUS_FEATURE_MM_FEEDBACK */
+				#ifdef OPLUS_BUG_STABILITY
+				DSI_CTRL_MM_ERR(dsi_ctrl, "failed to enable host power regs\n");
+				#endif
 				goto error_get_sync;
 			}
 		}
@@ -1387,6 +1386,7 @@ static void dsi_configure_command_scheduling(struct dsi_ctrl *dsi_ctrl,
 	 */
 	if ((dsi_ctrl->host_config.panel_mode == DSI_OP_CMD_MODE) &&
 			dsi_hw_ops.configure_cmddma_window) {
+
 		sched_line_no = (line_no == 0) ? TEARCHECK_WINDOW_SIZE :
 					line_no;
 		window = (window == 0) ? timing->v_active : window;
@@ -1569,7 +1569,6 @@ static void dsi_ctrl_validate_msg_flags(struct dsi_ctrl *dsi_ctrl,
 		!(msg->flags & MIPI_DSI_MSG_ASYNC_OVERRIDE))
 		*flags &= ~DSI_CTRL_CMD_ASYNC_WAIT;
 }
-
 /*#ifdef OPLUS_BUG_STABILITY*/
 static void print_cmd_desc(struct dsi_ctrl *dsi_ctrl, const struct mipi_dsi_msg *msg)
 {
@@ -1649,10 +1648,8 @@ static int dsi_message_tx(struct dsi_ctrl *dsi_ctrl,
 	u32 cnt = 0;
 	u8 *cmdbuf;
 
-	/*#ifdef OPLUS_BUG_STABILITY*/
         if (dsi_cmd_log_enable)
             print_cmd_desc(dsi_ctrl, msg);
-	/*#endif*/
 
 	/* Select the tx mode to transfer the command */
 	dsi_message_setup_tx_mode(dsi_ctrl, msg->tx_len, flags);
@@ -3055,9 +3052,6 @@ static void _dsi_ctrl_destroy_isr(struct dsi_ctrl *dsi_ctrl)
 		devm_free_irq(&dsi_ctrl->pdev->dev,
 				dsi_ctrl->irq_info.irq_num, dsi_ctrl);
 		dsi_ctrl->irq_info.irq_num = -1;
-          	//#ifdef OPLUS_BUG_STABILITY
-		dsi_ctrl->irq_info.irq_stat_mask = 0;
-          	//endif /* OPLUS_BUG_STABILITY */
 	}
 }
 

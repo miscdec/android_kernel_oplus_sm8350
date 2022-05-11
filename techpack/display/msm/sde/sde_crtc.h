@@ -254,6 +254,7 @@ struct sde_crtc_misr_info {
  * @feature_list  : list of color processing features supported on a crtc
  * @active_list   : list of color processing features are active
  * @dirty_list    : list of color processing features are dirty
+ * @revalidate_mask : stores dirty flags to revalidate after idlepc
  * @ad_dirty      : list containing ad properties that are dirty
  * @ad_active     : list containing ad properties that are active
  * @crtc_lock     : crtc lock around create, destroy and access.
@@ -348,6 +349,7 @@ struct sde_crtc {
 	spinlock_t spin_lock;
 	spinlock_t fevent_spin_lock;
 	bool kickoff_in_progress;
+	unsigned long revalidate_mask;
 
 	/* for handling internal event thread */
 	struct sde_crtc_event event_cache[SDE_CRTC_MAX_EVENT_COUNT];
@@ -397,6 +399,7 @@ struct sde_crtc {
 enum sde_crtc_dirty_flags {
 	SDE_CRTC_DIRTY_DEST_SCALER,
 	SDE_CRTC_DIRTY_DIM_LAYERS,
+	SDE_CRTC_DIRTY_UIDLE,
 	SDE_CRTC_DIRTY_MAX,
 };
 
@@ -466,7 +469,7 @@ struct sde_crtc_state {
 	bool fingerprint_defer_sync;
 	struct sde_hw_dim_layer *fingerprint_dim_layer;
 	bool aod_skip_pcc;
-#endif
+#endif /* OPLUS_BUG_STABILITY */
 };
 
 enum sde_crtc_irq_state {
@@ -489,7 +492,7 @@ struct sde_crtc_irq_info {
 	struct sde_irq_callback irq;
 	u32 event;
 	int (*func)(struct drm_crtc *crtc, bool en,
-		    struct sde_irq_callback *irq);
+			struct sde_irq_callback *irq);
 	struct list_head list;
 	enum sde_crtc_irq_state state;
 	spinlock_t state_lock;
@@ -513,7 +516,7 @@ struct sde_crtc_irq_info {
  * unless destination scaler feature is enabled
  */
 static inline int sde_crtc_get_mixer_width(struct sde_crtc *sde_crtc,
-		struct sde_crtc_state *cstate, struct drm_display_mode *mode)
+	struct sde_crtc_state *cstate, struct drm_display_mode *mode)
 {
 	u32 mixer_width;
 
@@ -522,7 +525,6 @@ static inline int sde_crtc_get_mixer_width(struct sde_crtc *sde_crtc,
 
 	if (cstate->num_ds_enabled)
 		mixer_width = cstate->ds_cfg[0].lm_width;
-
 	else
 		mixer_width = mode->hdisplay / sde_crtc->num_mixers;
 
@@ -541,7 +543,7 @@ static inline int sde_crtc_get_mixer_height(struct sde_crtc *sde_crtc,
 		return 0;
 
 	return (cstate->num_ds_enabled ?
-		cstate->ds_cfg[0].lm_height : mode->vdisplay);
+			cstate->ds_cfg[0].lm_height : mode->vdisplay);
 }
 
 /**
@@ -583,7 +585,7 @@ static inline void sde_crtc_set_needs_hw_reset(struct drm_crtc *crtc)
  * Returns: Zero if current commit should still be attempted
  */
 int sde_crtc_reset_hw(struct drm_crtc *crtc, struct drm_crtc_state *old_state,
-		      bool recovery_events);
+	bool recovery_events);
 
 /**
  * sde_crtc_request_frame_reset - requests for next frame reset
@@ -615,7 +617,7 @@ int sde_crtc_vblank(struct drm_crtc *crtc, bool en);
  * @old_state: Pointer to drm crtc old state object
  */
 void sde_crtc_commit_kickoff(struct drm_crtc *crtc,
-			     struct drm_crtc_state *old_state);
+		struct drm_crtc_state *old_state);
 
 /**
  * sde_crtc_prepare_commit - callback to prepare for output fences
@@ -623,7 +625,7 @@ void sde_crtc_commit_kickoff(struct drm_crtc *crtc,
  * @old_state: Pointer to drm crtc old state object
  */
 void sde_crtc_prepare_commit(struct drm_crtc *crtc,
-			     struct drm_crtc_state *old_state);
+		struct drm_crtc_state *old_state);
 
 /**
  * sde_crtc_complete_commit - callback signalling completion of current commit
@@ -631,7 +633,7 @@ void sde_crtc_prepare_commit(struct drm_crtc *crtc,
  * @old_state: Pointer to drm crtc old state object
  */
 void sde_crtc_complete_commit(struct drm_crtc *crtc,
-			      struct drm_crtc_state *old_state);
+		struct drm_crtc_state *old_state);
 
 /**
  * sde_crtc_init - create a new crtc object
@@ -664,7 +666,7 @@ void sde_crtc_complete_flip(struct drm_crtc *crtc, struct drm_file *file);
  * @en: Flag to enable/disable the event
  */
 int sde_crtc_register_custom_event(struct sde_kms *kms,
-				   struct drm_crtc *crtc_drm, u32 event, bool en);
+		struct drm_crtc *crtc_drm, u32 event, bool en);
 
 /**
  * sde_crtc_get_intf_mode - get interface mode of the given crtc
@@ -691,10 +693,10 @@ u32 sde_crtc_get_dfps_maxfps(struct drm_crtc *crtc);
  * @crtc: Pointer to crtc
  */
 static inline enum sde_crtc_client_type sde_crtc_get_client_type(
-	struct drm_crtc *crtc)
+						struct drm_crtc *crtc)
 {
 	struct sde_crtc_state *cstate =
-		crtc ? to_sde_crtc_state(crtc->state) : NULL;
+			crtc ? to_sde_crtc_state(crtc->state) : NULL;
 
 	if (!cstate)
 		return RT_CLIENT;
@@ -758,8 +760,8 @@ static inline bool sde_crtc_is_reset_required(struct drm_crtc *crtc)
  * Returns: Zero on success
  */
 int sde_crtc_event_queue(struct drm_crtc *crtc,
-			 void (*func)(struct drm_crtc *crtc, void *usr),
-			 void *usr, bool color_processing_event);
+		void (*func)(struct drm_crtc *crtc, void *usr),
+		void *usr, bool color_processing_event);
 
 /**
  * sde_crtc_get_crtc_roi - retrieve the crtc_roi from the given state object
@@ -769,7 +771,7 @@ int sde_crtc_event_queue(struct drm_crtc *crtc,
  * @crtc_roi: Output pointer to crtc roi in the given state
  */
 void sde_crtc_get_crtc_roi(struct drm_crtc_state *state,
-			   const struct sde_rect **crtc_roi);
+		const struct sde_rect **crtc_roi);
 
 /**
  * sde_crtc_is_crtc_roi_dirty - retrieve whether crtc_roi was updated this frame
@@ -792,7 +794,7 @@ static inline int sde_crtc_get_secure_level(struct drm_crtc *crtc,
 		return -EINVAL;
 
 	return sde_crtc_get_property(to_sde_crtc_state(state),
-				     CRTC_PROP_SECURITY_LEVEL);
+			CRTC_PROP_SECURITY_LEVEL);
 }
 
 /** sde_crtc_atomic_check_has_modeset - checks if the new_crtc_state in the
@@ -810,12 +812,12 @@ static inline bool sde_crtc_atomic_check_has_modeset(
 		return false;
 
 	crtc_state = drm_atomic_get_new_crtc_state(state,
-			crtc);
+					crtc);
 	return (crtc_state && drm_atomic_crtc_needs_modeset(crtc_state));
 }
 
 static inline bool sde_crtc_state_in_clone_mode(struct drm_encoder *encoder,
-		struct drm_crtc_state *state)
+	struct drm_crtc_state *state)
 {
 	struct sde_crtc_state *cstate;
 
@@ -823,9 +825,8 @@ static inline bool sde_crtc_state_in_clone_mode(struct drm_encoder *encoder,
 		return false;
 
 	cstate = to_sde_crtc_state(state);
-
 	if (sde_encoder_in_clone_mode(encoder) ||
-			(cstate->cwb_enc_mask & drm_encoder_mask(encoder)))
+		(cstate->cwb_enc_mask & drm_encoder_mask(encoder)))
 		return true;
 
 	return false;
@@ -841,8 +842,8 @@ static inline bool sde_crtc_state_in_clone_mode(struct drm_encoder *encoder,
  * case of error cases
  */
 int sde_crtc_get_secure_transition_ops(struct drm_crtc *crtc,
-				       struct drm_crtc_state *old_crtc_state,
-				       bool old_valid_fb);
+		struct drm_crtc_state *old_crtc_state,
+		bool old_valid_fb);
 
 /**
  * sde_crtc_find_plane_fb_modes - finds the modes of all planes attached
@@ -853,7 +854,7 @@ int sde_crtc_get_secure_transition_ops(struct drm_crtc *crtc,
  * @fb_sec_dir: number of secure-ui/secure-camera planes
  */
 int sde_crtc_find_plane_fb_modes(struct drm_crtc *crtc,
-				 uint32_t *fb_ns, uint32_t *fb_sec, uint32_t *fb_sec_dir);
+		uint32_t *fb_ns, uint32_t *fb_sec, uint32_t *fb_sec_dir);
 
 /**
  * sde_crtc_state_find_plane_fb_modes - finds the modes of all planes attached
@@ -864,7 +865,7 @@ int sde_crtc_find_plane_fb_modes(struct drm_crtc *crtc,
  * @fb_sec_dir: number of secure-ui/secure-camera planes
  */
 int sde_crtc_state_find_plane_fb_modes(struct drm_crtc_state *state,
-				       uint32_t *fb_ns, uint32_t *fb_sec, uint32_t *fb_sec_dir);
+		uint32_t *fb_ns, uint32_t *fb_sec, uint32_t *fb_sec_dir);
 
 /**
  * sde_crtc_secure_ctrl - Initiates the transition between secure and
@@ -896,7 +897,7 @@ void sde_crtc_timeline_status(struct drm_crtc *crtc);
  * @crtc: Pointer to drm crtc structure
  */
 void sde_crtc_update_cont_splash_settings(
-	struct drm_crtc *crtc);
+		struct drm_crtc *crtc);
 
 /**
  * sde_crtc_set_qos_dirty - update plane dirty flag to include
@@ -919,7 +920,7 @@ void sde_crtc_misr_setup(struct drm_crtc *crtc, bool enable, u32 frame_count);
  * @crtc_misr_info: Pointer to crtc misr info structure
  */
 void sde_crtc_get_misr_info(struct drm_crtc *crtc,
-			    struct sde_crtc_misr_info *crtc_misr_info);
+		struct sde_crtc_misr_info *crtc_misr_info);
 
 #ifdef OPLUS_BUG_STABILITY
 struct sde_kms *_sde_crtc_get_kms_(struct drm_crtc *crtc);
@@ -932,7 +933,7 @@ struct sde_kms *_sde_crtc_get_kms_(struct drm_crtc *crtc);
  * @target_bpp: target value to be stored
  */
 static inline void sde_crtc_set_bpp(struct sde_crtc *sde_crtc, int src_bpp,
-				    int target_bpp)
+		int target_bpp)
 {
 	sde_crtc->src_bpp = src_bpp;
 	sde_crtc->target_bpp = target_bpp;
@@ -945,7 +946,7 @@ static inline void sde_crtc_set_bpp(struct sde_crtc *sde_crtc, int src_bpp,
  * @is_vidmode: if encoder is video mode
  */
 void sde_crtc_static_img_control(struct drm_crtc *crtc,
-				 enum sde_crtc_cache_state state, bool is_vidmode);
+		enum sde_crtc_cache_state state, bool is_vidmode);
 
 /**
  * sde_crtc_static_cache_read_kickoff - kickoff cache read work
@@ -961,7 +962,7 @@ void sde_crtc_static_cache_read_kickoff(struct drm_crtc *crtc);
  * @crtc_state:	Pointer to DRM crtc state
  */
 int sde_crtc_get_num_datapath(struct drm_crtc *crtc,
-			      struct drm_connector *connector, struct drm_crtc_state *crtc_state);
+	struct drm_connector *connector, struct drm_crtc_state *crtc_state);
 
 /**
  * sde_crtc_reset_sw_state - reset dirty proerties on crtc and

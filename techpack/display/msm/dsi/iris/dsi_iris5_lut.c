@@ -344,7 +344,7 @@ int iris_parse_lut_cmds(u8 flag)
 		IRIS_LOGI("%s(%d), request name: %s, size: %u.",
 				__func__, __LINE__, IRIS_FIRMWARE_NAME, data[0].size);
 	} else {
-		;
+		IRIS_LOGI("%s(), failed to request: %s", __func__, IRIS_FIRMWARE_NAME);
 	}
 
 	// Load "iris5_ccf1.fw".
@@ -385,11 +385,11 @@ int iris_parse_lut_cmds(u8 flag)
 					__func__, __LINE__,
 					ccf1_name, data[1].size, cm_lut_opt_cnt);
 		} else {
-			IRIS_LOGE("%s(), invalid format for firmware: %s",
+			IRIS_LOGI("%s(), invalid format for firmware: %s",
 					__func__, ccf1_name);
 		}
 	} else {
-		;
+		IRIS_LOGE("%s(), failed to request: %s", __func__, ccf1_name);
 	}
 
 	// Load "iris5_ccf2.fw".
@@ -428,11 +428,11 @@ int iris_parse_lut_cmds(u8 flag)
 			IRIS_LOGI("%s(%d), request name: %s, size: %u, option count: %u.",
 					__func__, __LINE__, ccf2_name, data[2].size, gamma_lut_opt_cnt);
 		} else {
-			IRIS_LOGE("%s(), invalid format for firmware: %s",
+			IRIS_LOGI("%s(), invalid format for firmware: %s",
 					__func__, ccf2_name);
 		}
 	} else {
-		;
+		IRIS_LOGE("%s(), failed to request: %s", __func__, ccf2_name);
 	}
 
 	firmware_loaded = (firmware_state == 0x07 ? FIRMWARE_LOAD_SUCCESS : FIRMWARE_LOAD_FAIL);

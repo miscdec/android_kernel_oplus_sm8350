@@ -1,11 +1,11 @@
 /***************************************************************
 ** Copyright (C),  2020,  OPLUS Mobile Comm Corp.,  Ltd
-** VENDOR_EDIT
+**
 ** File : oplus_ffl.h
 ** Description : oplus ffl feature
 ** Version : 1.0
 ** Date : 2020/04/23
-** Author : Qianxu@MM.Display.LCD Driver
+** Author :
 **
 ** ------------------------------- Revision History: -----------
 **  <author>        <data>        <version >        <desc>

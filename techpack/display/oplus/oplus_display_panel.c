@@ -1,11 +1,11 @@
 /***************************************************************
 ** Copyright (C),  2020,  oplus Mobile Comm Corp.,  Ltd
-** VENDOR_EDIT
+**
 ** File : oplus_display_panel.c
 ** Description : oplus display panel char dev  /dev/oplus_panel
 ** Version : 1.0
 ** Date : 2020/06/13
-** Author : Li.Sheng@MULTIMEDIA.DISPLAY.LCD
+** Author :
 **
 ** ------------------------------- Revision History: -----------
 **  <author>        <data>        <version >        <desc>
@@ -16,7 +16,15 @@
 #include <linux/dma-buf.h>
 #include <linux/mm_types.h>
 #include "oplus_display_panel.h"
+#include "oplus_onscreenfingerprint.h"
+#include "oplus_dc_diming.h"
+#include "oplus_display_panel_power.h"
+#include "oplus_display_panel_common.h"
+#include "oplus_display_panel_seed.h"
+#include "oplus_ffl.h"
+#include "oplus_aod.h"
 #include "oplus_adfr.h"
+
 struct oplus_apollo_backlight_list *p_apollo_backlight = NULL;
 static int oplus_display_set_apollo_backlight_value(void *data);
 
@@ -39,6 +47,7 @@ static const struct panel_ioctl_desc panel_ioctls[] = {
 	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_AOD, oplus_panel_get_aod_light_mode),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_MAX_BRIGHTNESS, oplus_display_panel_set_max_brightness),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_MAX_BRIGHTNESS, oplus_display_panel_get_max_brightness),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_OPLUS_BRIGHTNESS, oplus_display_panel_get_brightness),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_PANELINFO, oplus_display_panel_get_vendor),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_CCD, oplus_display_panel_get_ccd_check),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_SERIAL_NUMBER, oplus_display_panel_get_serial_number),
@@ -48,15 +57,36 @@ static const struct panel_ioctl_desc panel_ioctls[] = {
 	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_DIM_ALPHA, oplus_display_panel_get_dim_alpha),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_DIM_DC_ALPHA, oplus_display_panel_set_dim_alpha),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_DIM_DC_ALPHA, oplus_display_panel_get_dim_dc_alpha),
-	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_SOFTIRIS_COLOR, oplus_display_get_softiris_color_status),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_AUDIO_READY, oplus_display_panel_set_audio_ready),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_DISPLAY_TIMING_INFO, oplus_display_panel_dump_info),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_PANEL_DSC, oplus_display_panel_get_dsc),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_POWER_STATUS, oplus_display_panel_set_power_status),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_POWER_STATUS, oplus_display_panel_get_power_status),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_REGULATOR_CONTROL, oplus_display_panel_regulator_control),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_CLOSEBL_FLAG, oplus_display_panel_set_closebl_flag),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_CLOSEBL_FLAG, oplus_display_panel_get_closebl_flag),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_PANEL_REG, oplus_display_panel_set_reg),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_PANEL_REG, oplus_display_panel_get_reg),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_DIMLAYER_HBM, oplus_display_panel_set_dimlayer_hbm),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_DIMLAYER_HBM, oplus_display_panel_get_dimlayer_hbm),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_DIMLAYER_BL_EN, oplus_display_panel_set_dimlayer_enable),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_DIMLAYER_BL_EN, oplus_display_panel_get_dimlayer_enable),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_PANEL_BLANK, oplus_display_panel_notify_blank),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_SPR, oplus_display_panel_set_spr),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_SPR, oplus_display_panel_get_spr),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_ROUNDCORNER, oplus_display_panel_get_roundcorner),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_DYNAMIC_OSC_CLOCK, oplus_display_panel_set_dynamic_osc_clock),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_DYNAMIC_OSC_CLOCK, oplus_display_panel_get_dynamic_osc_clock),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_APOLLO_BACKLIGHT, oplus_display_set_apollo_backlight_value),
-	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_DITHER_STATUS, oplus_display_set_dither_status),
-	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_DITHER_STATUS, oplus_display_get_dither_status),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_SOFTIRIS_COLOR, oplus_display_get_softiris_color_status),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_OPLUS_MAXBRIGHTNESS, oplus_display_panel_get_oplus_max_brightness),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_FP_PRESS, oplus_display_panel_notify_fp_press),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_DITHER_STATUS, oplus_display_panel_set_dither),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_DITHER_STATUS, oplus_display_panel_get_dither),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_TE_REFCOUNT_ENABLE, oplus_enable_te_refcount),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_TE_REFCOUNT_ENABLE, oplus_get_te_fps),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_DP_SUPPORT, oplus_display_get_dp_support),
-	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_CABC_STATUS, oplus_display_set_cabc_status),
-	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_CABC_STATUS, oplus_display_get_cabc_status),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_QCOM_LOG_LEVEL, oplus_display_set_qcom_loglevel),
 };
 
 int oplus_display_fix_apollo_level(void)
@@ -85,7 +115,7 @@ int oplus_display_fix_apollo_level(void)
 		}
 	}
 
-	pr_err("%s apollo_id = [%d], id_value = [%d]", __func__, p_apollo_backlight->bl_id_lens, apollo_id[0]);
+	pr_debug("%s apollo_id = [%d], id_value = [%d]", __func__, p_apollo_backlight->bl_id_lens, apollo_id[0]);
 
 	return 0;
 }
@@ -105,7 +135,7 @@ static int oplus_display_set_apollo_backlight_value(void *data)
 
 	p_apollo_backlight->panel_bl_list[index] = p_apollo->bl_level;
 	p_apollo_backlight->apollo_bl_list[index] = p_apollo->apollo_bl_level;
-	pr_err("%s, panel_level = %d, apollo_level = %d",
+	pr_debug("%s, panel_level = %d, apollo_level = %d",
 		__func__, p_apollo->bl_level, p_apollo->apollo_bl_level);
 
 	return ret;
@@ -161,7 +191,7 @@ static int panel_dmabuf_mmap(struct dma_buf *dma_buf, struct vm_area_struct *vma
 
 	ret = remap_pfn_range(vma, vma->vm_start, virt_to_pfn(vaddr),
 		vma->vm_end - vma->vm_start, vma->vm_page_prot);
-	pr_err("%s mmap ret = %d, size = %d", __func__, ret, vma->vm_end - vma->vm_start);
+	pr_debug("%s mmap ret = %d, size = %d", __func__, ret, vma->vm_end - vma->vm_start);
 
 	return ret;
 }
@@ -230,7 +260,7 @@ static int oplus_export_dmabuf(int buf_size)
 		+ APOLLO_BACKLIGHT_LENS/sizeof(unsigned int);
 	p_apollo_backlight->bl_index_last = -1;
 	p_apollo_backlight->bl_level_last = -125; //number for bl init level
-	pr_err("%s buf_size = %d bytes, p_panel_backlight = %p, vaddr = %p\n",
+	pr_debug("%s buf_size = %d bytes, p_panel_backlight = %p, vaddr = %p\n",
 		__func__, p_apollo_backlight->buf_size, p_apollo_backlight->panel_bl_list,
 		p_apollo_backlight->vaddr);
 
@@ -260,17 +290,26 @@ static int panel_open(struct inode *inode, struct file *filp)
 	return 0;
 }
 
+extern ssize_t oplus_sde_evtlog_dump_read(struct file *file, char __user *buff,
+		size_t count, loff_t *ppos);
 static ssize_t panel_read(struct file *filp, char __user *buffer,
-			  size_t count, loff_t *offset)
+		size_t count, loff_t *offset)
 {
-	pr_err("%s\n", __func__);
-	return count;
+	ssize_t lens = 0;
+
+	lens += oplus_sde_evtlog_dump_read(filp, buffer, count, offset);
+	if (lens < 0) {
+		lens = 0;
+	}
+	/*other dump add here, as for lens add*/
+
+	return lens;
 }
 
 static ssize_t panel_write(struct file *file, const char __user *buffer,
-			   size_t count, loff_t *f_pos)
+		size_t count, loff_t *f_pos)
 {
-	pr_err("%s\n", __func__);
+	pr_debug("%s\n", __func__);
 	return count;
 }
 
@@ -310,7 +349,7 @@ long panel_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 	ksize = max(max(in_size, out_size), drv_size);
 
-	pr_err("%s pid = %d, cmd = %s\n", __func__, task_pid_nr(current), ioctl->name);
+	pr_debug("%s pid = %d, cmd = %s\n", __func__, task_pid_nr(current), ioctl->name);
 
 	if (ksize <= sizeof(static_data)) {
 		kdata = static_data;
@@ -360,7 +399,7 @@ int panel_release(struct inode *inode, struct file *filp)
 {
 	--panel_ref;
 	module_put(THIS_MODULE);
-	pr_err("%s\n", __func__);
+	pr_info("%s\n", __func__);
 
 	return 0;
 }

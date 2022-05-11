@@ -1,11 +1,11 @@
 /***************************************************************
 ** Copyright (C),  2020,  OPLUS Mobile Comm Corp.,  Ltd
-** VENDOR_EDIT
+**
 ** File : oplus_display_panel_power.c
 ** Description : oplus display panel power control
 ** Version : 1.0
 ** Date : 2020/06/13
-** Author : Li.Sheng@MULTIMEDIA.DISPLAY.LCD
+** Author :
 **
 ** ------------------------------- Revision History: -----------
 **  <author>        <data>        <version >        <desc>
@@ -15,6 +15,8 @@
 
 PANEL_VOLTAGE_BAK panel_vol_bak[PANEL_VOLTAGE_ID_MAX] = {{0}, {0}, {2, 0, 1, 2, ""}};
 u32 panel_pwr_vg_base = 0;
+extern int oplus_request_power_status;
+DEFINE_MUTEX(oplus_power_status_lock);
 
 static int oplus_panel_find_vreg_by_name(const char *name)
 {
@@ -156,47 +158,57 @@ int oplus_display_panel_get_pwr(void *data)
 {
 	int ret = 0;
 	struct panel_vol_get *panel_vol = data;
-	pr_err("%s : [id] = %d\n", __func__, panel_vol->panel_id);
-	ret = oplus_panel_update_current_voltage(panel_vol->panel_id);
+	u32 vol_id = (panel_vol->panel_id - 1);
+	pr_err("%s : [id] = %d\n", __func__, vol_id);
 
-	if (ret < 0) {
-		pr_err("%s : update_current_voltage error = %d\n", __func__, ret);
-		return ret;
-
-	} else {
-		panel_vol->panel_cur = ret;
-		panel_vol->panel_min = panel_vol_bak[panel_vol->panel_id].voltage_min;
-		panel_vol->panel_max = panel_vol_bak[panel_vol->panel_id].voltage_max;
-		pr_err("%s : [id min cur max] = [%u32, %u32, %u32, %u32]\n", __func__,
-		       panel_vol->panel_id, panel_vol->panel_min,
-		       panel_vol->panel_cur, panel_vol->panel_max);
-		return 0;
+	if (vol_id < 0) {
+		pr_err("%s error id: [id] = %d\n", __func__, vol_id);
+		return -EINVAL;
 	}
+
+	panel_vol->panel_min = panel_vol_bak[vol_id].voltage_min;
+	panel_vol->panel_max = panel_vol_bak[vol_id].voltage_max;
+	panel_vol->panel_cur = panel_vol_bak[vol_id].voltage_current;
+
+	if (vol_id < PANEL_VOLTAGE_ID_VG_BASE &&
+		vol_id >= PANEL_VOLTAGE_ID_VDDI) {
+		ret = oplus_panel_update_current_voltage(vol_id);
+		if (ret < 0) {
+			pr_err("%s : update_current_voltage error = %d\n", __func__, ret);
+			return ret;
+		} else {
+			panel_vol->panel_cur = ret;
+			pr_err("%s : [id min cur max] = [%u32, %u32, %u32, %u32]\n", __func__,
+				vol_id, panel_vol->panel_min,
+				panel_vol->panel_cur, panel_vol->panel_max);
+			return 0;
+		}
+	}
+
+	return ret;
 }
 
 int oplus_display_panel_set_pwr(void *data)
 {
-	int rc = 0, pwr_id = 0;
-	u32 panel_vol_value = 0, panel_vol_id = 0;
 	struct panel_vol_set *panel_vol = data;
+	int panel_vol_value = 0, rc = 0, panel_vol_id = 0, pwr_id = 0;
 	struct dsi_vreg *dsi_reg = NULL;
 	struct dsi_regulator_info *dsi_reg_info = NULL;
 	struct dsi_display *display = get_main_display();
 
-	panel_vol_id = (panel_vol->panel_id & 0x0F);
+	panel_vol_id = ((panel_vol->panel_id & 0x0F)-1);
 	panel_vol_value = panel_vol->panel_vol;
 
 	pr_err("debug for %s, id = %d value = %d\n",
-	       __func__, panel_vol_id, panel_vol_value);
+		__func__, panel_vol_id, panel_vol_value);
 
-	if (panel_vol_id > PANEL_VOLTAGE_ID_MAX) {
+	if (panel_vol_id < 0 || panel_vol_id > PANEL_VOLTAGE_ID_MAX) {
 		return -EINVAL;
 	}
 
 	if (panel_vol_value < panel_vol_bak[panel_vol_id].voltage_min ||
-			panel_vol_value > panel_vol_bak[panel_vol_id].voltage_max) {
+		panel_vol_id > panel_vol_bak[panel_vol_id].voltage_max)
 		return -EINVAL;
-	}
 
 	if (!display) {
 		return -ENODEV;
@@ -215,11 +227,9 @@ int oplus_display_panel_set_pwr(void *data)
 	dsi_reg_info = &display->panel->power_info;
 
 	pwr_id = oplus_panel_find_vreg_by_name(panel_vol_bak[panel_vol_id].pwr_name);
-
 	if (pwr_id < 0) {
 		pr_err("%s: can't find the vreg name, please re-check vreg name: %s \n",
-		       __func__,
-		       panel_vol_bak[panel_vol_id].pwr_name);
+			__func__, panel_vol_bak[panel_vol_id].pwr_name);
 		return pwr_id;
 	}
 
@@ -229,9 +239,57 @@ int oplus_display_panel_set_pwr(void *data)
 
 	if (rc) {
 		pr_err("Set voltage(%s) fail, rc=%d\n",
-		       dsi_reg->vreg_name, rc);
+			 dsi_reg->vreg_name, rc);
 		return -EINVAL;
 	}
 
 	return rc;
 }
+
+int __oplus_display_set_power_status(int status) {
+	mutex_lock(&oplus_power_status_lock);
+	if(status != oplus_request_power_status) {
+		oplus_request_power_status = status;
+	}
+	mutex_unlock(&oplus_power_status_lock);
+	return 0;
+}
+
+int oplus_display_panel_get_power_status(void *data) {
+	uint32_t *power_status = data;
+
+	printk(KERN_INFO "oplus_display_get_power_status = %d\n", get_oplus_display_power_status());
+	(*power_status) = get_oplus_display_power_status();
+
+	return 0;
+}
+
+int oplus_display_panel_set_power_status(void *data) {
+	uint32_t *temp_save = data;
+
+	printk(KERN_INFO "%s oplus_display_set_power_status = %d\n", __func__, (*temp_save));
+	__oplus_display_set_power_status((*temp_save));
+
+	return 0;
+}
+
+int oplus_display_panel_regulator_control(void *data) {
+	uint32_t *temp_save_user = data;
+	uint32_t temp_save = (*temp_save_user);
+	struct dsi_display *temp_display;
+
+	printk(KERN_INFO "%s oplus_display_regulator_control = %d\n", __func__, temp_save);
+	if(get_main_display() == NULL) {
+		printk(KERN_INFO "oplus_display_regulator_control and main display is null");
+		return -1;
+	}
+	temp_display = get_main_display();
+	if(temp_save == 0) {
+		dsi_pwr_enable_regulator(&temp_display->panel->power_info, false);
+	} else if (temp_save == 1) {
+		dsi_pwr_enable_regulator(&temp_display->panel->power_info, true);
+	}
+
+	return 0;
+}
+

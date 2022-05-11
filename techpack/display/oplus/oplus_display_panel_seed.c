@@ -1,11 +1,11 @@
 /***************************************************************
 ** Copyright (C),  2020,  OPLUS Mobile Comm Corp.,  Ltd
-** VENDOR_EDIT
+**
 ** File : oplus_display_panel_seed.c
 ** Description : oplus display panel seed feature
 ** Version : 1.0
 ** Date : 2020/06/13
-** Author : Li.Sheng@MULTIMEDIA.DISPLAY.LCD
+** Author :
 **
 ** ------------------------------- Revision History: -----------
 **  <author>        <data>        <version >        <desc>
@@ -19,11 +19,6 @@ int seed_mode = 0;
 extern int oplus_seed_backlight;
 extern int oplus_seed_last_backlight;
 extern bool oplus_set_color_mode;
-//#ifdef OPLUS_BUG_STABILITY
-bool seed_mode_flag = false;
-extern u32 bl_lvl_backup;
-extern oplus_dc_v2_on;
-//#endif /*OPLUS_BUG_STABILITY*/
 
 #define PANEL_LOADING_EFFECT_FLAG 100
 #define PANEL_LOADING_EFFECT_MODE1 101
@@ -40,11 +35,7 @@ int oplus_display_get_seed_mode(void)
 int __oplus_display_set_seed(int mode)
 {
 	mutex_lock(&oplus_seed_lock);
-	//#ifdef OPLUS_BUG_STABILITY
-	if (bl_lvl_backup == 0 && oplus_dc_v2_on == false && seed_mode == 1) {
-		seed_mode_flag = true;
-        }
-	//#endif /*OPLUS_BUG_STABILITY*/
+
 	if (mode != seed_mode) {
 		seed_mode = mode;
 	}
@@ -61,15 +52,9 @@ int dsi_panel_seed_mode_unlock(struct dsi_panel *panel, int mode)
 	if (!dsi_panel_initialized(panel)) {
 		return -EINVAL;
 	}
-	//#ifdef OPLUS_BUG_STABILITY
-	if (oplus_dc_v2_on) {
-		if (seed_mode_flag  == true) {
-			seed_mode = 1;
-                        mode = 1;
-			seed_mode_flag = false;
-		}
-	}
-	//#endif /*OPLUS_BUG_STABILITY*/
+
+	if (!strcmp(panel->name, "samsung ams662zs01 fhd cmd mode dsc dsi panel"))
+		mode = mode-100;
 	switch (mode) {
 	case 0:
 		if (!oplus_set_color_mode && oplus_seed_backlight && !strcmp(panel->name, "samsung AMS643YE01 dsc cmd mode panel")) {
@@ -79,6 +64,7 @@ int dsi_panel_seed_mode_unlock(struct dsi_panel *panel, int mode)
 			}
 		}
 		else {
+			pr_err("dsi send the command DSI_CMD_SEED_MODE0 \n");
 			rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SEED_MODE0);
 		}
 
@@ -97,6 +83,7 @@ int dsi_panel_seed_mode_unlock(struct dsi_panel *panel, int mode)
 			}
 		}
 		else {
+			pr_err("dsi send the command DSI_CMD_SEED_MODE1 \n");
 			rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SEED_MODE1);
 		}
 
@@ -115,6 +102,7 @@ int dsi_panel_seed_mode_unlock(struct dsi_panel *panel, int mode)
 			}
 		}
 		else {
+			pr_err("dsi send the command DSI_CMD_SEED_MODE2 \n");
 			rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SEED_MODE2);
 		}
 
@@ -126,6 +114,7 @@ int dsi_panel_seed_mode_unlock(struct dsi_panel *panel, int mode)
 		break;
 
 	case 3:
+		pr_err("dsi send the command DSI_CMD_SEED_MODE3 \n");
 		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SEED_MODE3);
 
 		if (rc) {
@@ -136,6 +125,7 @@ int dsi_panel_seed_mode_unlock(struct dsi_panel *panel, int mode)
 		break;
 
 	case 4:
+		pr_err("dsi send the command DSI_CMD_SEED_MODE4 \n");
 		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SEED_MODE4);
 
 		if (rc) {
@@ -146,6 +136,7 @@ int dsi_panel_seed_mode_unlock(struct dsi_panel *panel, int mode)
 		break;
 
 	default:
+		pr_err("dsi send the command DSI_CMD_SEED_OFF \n");
 		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SEED_OFF);
 
 		if (rc) {
@@ -264,9 +255,11 @@ int dsi_panel_seed_mode(struct dsi_panel *panel, int mode)
 		rc = dsi_panel_loading_effect_mode_unlock(panel, mode);
 	} else if(!strcmp(panel->oplus_priv.vendor_name, "AMB670YF01") && (mode >= PANEL_LOADING_EFFECT_FLAG)){
 		rc = dsi_panel_loading_effect_mode_unlock(panel, mode);
-	}else if(!strcmp(panel->oplus_priv.vendor_name, "JDI_ILI7807S")){
-		return 0;
-	}else {
+	} else if ((mode >= PANEL_LOADING_EFFECT_FLAG) &&
+		(!strcmp(panel->oplus_priv.vendor_name, "S6E3XA1") ||
+		 !strcmp(panel->oplus_priv.vendor_name, "NT37701"))) {
+		rc = dsi_panel_loading_effect_mode_unlock(panel, mode);
+	} else {
 		rc = dsi_panel_seed_mode_unlock(panel, mode);
 	}
 
@@ -293,8 +286,10 @@ int dsi_display_seed_mode(struct dsi_display *display, int mode)
 
 	if ((!strcmp(display->panel->oplus_priv.vendor_name, "AMB670YF01")) ||
 		(!strcmp(display->panel->oplus_priv.vendor_name, "AMB655X")) ||
-		(!strcmp(display->panel->oplus_priv.vendor_name, "S6E3HC3")) ||
-		(!strcmp(display->panel->oplus_priv.vendor_name, "AMS643YE01"))) {
+		(!strcmp(display->panel->oplus_priv.vendor_name, "S6E3XA1")) ||
+		(!strcmp(display->panel->oplus_priv.vendor_name, "AMS662ZS01")) ||
+		(!strcmp(display->panel->oplus_priv.vendor_name, "NT37701")) ||
+		(!strcmp(display->panel->oplus_priv.vendor_name, "S6E3HC3"))) {
 		mutex_lock(&display->panel->panel_lock);
 	}
 
@@ -302,8 +297,10 @@ int dsi_display_seed_mode(struct dsi_display *display, int mode)
 
 	if ((!strcmp(display->panel->oplus_priv.vendor_name, "AMB670YF01")) ||
 		(!strcmp(display->panel->oplus_priv.vendor_name, "AMB655X")) ||
-		(!strcmp(display->panel->oplus_priv.vendor_name, "S6E3HC3")) ||
-		(!strcmp(display->panel->oplus_priv.vendor_name, "AMS643YE01"))) {
+		(!strcmp(display->panel->oplus_priv.vendor_name, "S6E3XA1")) ||
+		(!strcmp(display->panel->oplus_priv.vendor_name, "AMS662ZS01")) ||
+		(!strcmp(display->panel->oplus_priv.vendor_name, "NT37701")) ||
+		(!strcmp(display->panel->oplus_priv.vendor_name, "S6E3HC3"))) {
 		mutex_unlock(&display->panel->panel_lock);
 	}
 
@@ -321,9 +318,8 @@ int dsi_display_seed_mode(struct dsi_display *display, int mode)
 	return rc;
 }
 
-int oplus_dsi_update_seed_mode(void)
+int oplus_dsi_update_seed_mode(struct dsi_display *display)
 {
-	struct dsi_display *display = get_main_display();
 	int ret = 0;
 
 	if (!display) {
@@ -348,25 +344,29 @@ int oplus_display_panel_get_seed(void *data)
 int oplus_display_panel_set_seed(void *data)
 {
 	uint32_t *temp_save = data;
+	uint32_t panel_id = (*temp_save >> 12);
+	struct dsi_display *display = get_main_display();
+	seed_mode = (*temp_save & 0x0fff);
+	printk(KERN_INFO "%s oplus_display_set_seed = %d, panel_id = %d\n", __func__, seed_mode, panel_id);
 
-	printk(KERN_INFO "%s oplus_display_set_seed = %d\n", __func__, *temp_save);
-	seed_mode = *temp_save;
+	__oplus_display_set_seed(seed_mode);
 
-	__oplus_display_set_seed(*temp_save);
-
-	if (get_oplus_display_power_status() == OPLUS_DISPLAY_POWER_ON) {
-		if (get_main_display() == NULL) {
-			printk(KERN_INFO "oplus_display_set_seed and main display is null");
-			return -EINVAL;
-		}
-
-		dsi_display_seed_mode(get_main_display(), seed_mode);
-
-	} else {
-		printk(KERN_ERR
-		       "%s oplus_display_set_seed = %d, but now display panel status is not on\n",
-		       __func__, *temp_save);
+	if (1 == panel_id) {
+		display = get_sec_display();
 	}
+
+	if (display == NULL) {
+		printk(KERN_INFO "oplus_display_set_seed and main display is null");
+		return -EINVAL;
+	}
+	if (display->panel->power_mode != SDE_MODE_DPMS_ON) {
+		printk(KERN_ERR
+			"<%s> %s oplus_display_set_seed = %d, but now display panel power_mode is not on\n",
+			display->panel->oplus_priv.vendor_name, __func__, seed_mode);
+		return -EINVAL;
+	}
+
+	dsi_display_seed_mode(display, seed_mode);
 
 	return 0;
 }

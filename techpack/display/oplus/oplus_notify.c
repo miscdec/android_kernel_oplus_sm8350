@@ -1,11 +1,11 @@
 /***************************************************************
 ** Copyright (C),  2020,  oplus Mobile Comm Corp.,  Ltd
-** VENDOR_EDIT
+**
 ** File : oplus_aod.c
 ** Description : oplus aod feature
 ** Version : 1.0
 ** Date : 2020/09/24
-** Author : liping-m@MM.Display.LCD Driver
+** Author :
 **
 ** ------------------------------- Revision History: -----------
 **  <author>        <data>        <version >        <desc>
@@ -14,8 +14,6 @@
 #include <linux/msm_drm_notify.h>
 #include <linux/module.h>
 
-
-//#ifdef OPLUS_BUG_STABILITY
 static BLOCKING_NOTIFIER_HEAD(msm_drm_notifier_list);
 
 /**
@@ -60,4 +58,3 @@ int msm_drm_notifier_call_chain(unsigned long val, void *v)
 }
 EXPORT_SYMBOL(msm_drm_notifier_call_chain);
 MODULE_LICENSE("GPL v2");
-//#endif /* VENDOR_EDIT */

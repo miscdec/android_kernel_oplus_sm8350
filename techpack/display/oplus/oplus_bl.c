@@ -1,6 +1,6 @@
 /***************************************************************
 ** Copyright (C),  2021,  OPLUS Mobile Comm Corp.,  Ltd
-** VENDOR_EDIT
+**
 ** File : oplus_bl.c
 ** Description : oplus display backlight
 ** Version : 1.0

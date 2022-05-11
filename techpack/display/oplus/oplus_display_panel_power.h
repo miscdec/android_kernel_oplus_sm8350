@@ -1,11 +1,11 @@
 /***************************************************************
 ** Copyright (C),  2020,  OPLUS Mobile Comm Corp.,  Ltd
-** VENDOR_EDIT
+**
 ** File : oplus_display_panel_power.h
 ** Description : oplus display panel power control
 ** Version : 1.0
 ** Date : 2020/06/13
-** Author : Li.Sheng@MULTIMEDIA.DISPLAY.LCD
+** Author :
 **
 ** ------------------------------- Revision History: -----------
 **  <author>        <data>        <version >        <desc>
@@ -55,5 +55,9 @@ typedef struct panel_voltage_bak {
 
 int oplus_display_panel_set_pwr(void *data);
 int oplus_display_panel_get_pwr(void *data);
+int oplus_display_panel_get_power_status(void *data);
+int oplus_display_panel_set_power_status(void *data);
+int oplus_display_panel_regulator_control(void *data);
+int __oplus_display_set_power_status(int status);
 
 #endif /* _OPLUS_DISPLAY_PANEL_POWER_H_ */

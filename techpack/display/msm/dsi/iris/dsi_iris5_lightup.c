@@ -821,6 +821,7 @@ struct iris_ip_opt *iris_find_ip_opt(uint8_t ip, uint8_t opt_id)
 	struct iris_cfg *pcfg = iris_get_cfg();
 	int32_t type = pcfg->cmd_list_index;
 
+	IRIS_LOGV("%s(), ip: %#x, opt: %#x", __func__, ip, opt_id);
 	if (!_iris_is_valid_ip(ip)) {
 		IRIS_LOGE("%s(), ip %d is out of range", __func__, ip);
 		return NULL;
@@ -1771,6 +1772,7 @@ static int32_t _iris_init_cmd_comp(int32_t ip,
 	struct iris_ip_opt *opt = NULL;
 
 	if (!_iris_is_valid_ip(ip)) {
+		IRIS_LOGE("%s(), invalid ip: %#x", __func__, ip);
 		return -EINVAL;
 	}
 
@@ -2016,6 +2018,7 @@ int32_t iris_send_ipopt_cmds(int32_t ip, int32_t opt_id)
 	struct iris_cmd_comp cmd_comp;
 	struct iris_cfg *pcfg = iris_get_cfg_by_index(DSI_PRIMARY);
 
+	IRIS_LOGD("%s(), ip: %#x, opt: %#x.", __func__, ip, opt_id);
 	rc = _iris_init_cmd_comp(ip, opt_id, &cmd_comp);
 	if (rc) {
 		IRIS_LOGE("%s(), can not find in seq for ip: 0x%02x opt: 0x%02x.",
@@ -2211,6 +2214,7 @@ static int _iris_send_dtsi_pkt(
 	/*get single/multiple selection(s) according to option of ip*/
 	rc = _iris_init_cmd_comp(ip, opt_id, &comp_priv);
 	if (rc) {
+		IRIS_LOGE("%s(), invalid ip: %#x opt: %#x.", __func__, ip, opt_id);
 		return -EINVAL;
 	}
 

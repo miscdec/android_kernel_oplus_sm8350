@@ -122,6 +122,9 @@ int dsi_pll_init(struct platform_device *pdev, struct dsi_pll_resource **pll)
 	const char *label;
 	struct dsi_pll_resource *pll_res = NULL;
 	bool in_trusted_vm = false;
+#ifdef OPLUS_BUG_STABILITY
+	bool ssc_disable;
+#endif
 
 	if (!pdev->dev.of_node) {
 		pr_err("Invalid DSI PHY node\n");
@@ -165,6 +168,16 @@ int dsi_pll_init(struct platform_device *pdev, struct dsi_pll_resource **pll)
 	pll_res->ssc_en = of_property_read_bool(pdev->dev.of_node,
 						"qcom,dsi-pll-ssc-en");
 
+#ifdef OPLUS_BUG_STABILITY
+	ssc_disable = of_property_read_bool(pdev->dev.of_node,
+						"oplus,dsi-pll-ssc-disalbed");
+
+	if (ssc_disable) {
+		pll_res->ssc_en = false;
+		DSI_PLL_INFO(pll_res, "PLL SSC disalbed\n");
+	}
+#endif
+
 	if (pll_res->ssc_en) {
 		DSI_PLL_INFO(pll_res, "PLL SSC enabled\n");
 
@@ -182,7 +195,6 @@ int dsi_pll_init(struct platform_device *pdev, struct dsi_pll_resource **pll)
 		if (label && !strcmp(label, "center-spread"))
 			pll_res->ssc_center = true;
 	}
-
 
 	if (dsi_pll_get_ioresources(pdev, &pll_res->pll_base, "pll_base")) {
 		DSI_PLL_ERR(pll_res, "Unable to remap pll base resources\n");

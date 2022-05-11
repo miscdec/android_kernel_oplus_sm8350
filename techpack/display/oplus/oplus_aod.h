@@ -1,11 +1,11 @@
 /***************************************************************
 ** Copyright (C),  2020,  oplus Mobile Comm Corp.,  Ltd
-** VENDOR_EDIT
+**
 ** File : oplus_aod.h
 ** Description : oplus aod feature
 ** Version : 1.0
 ** Date : 2020/04/23
-** Author : Qianxu@MM.Display.LCD Driver
+** Author :
 **
 ** ------------------------------- Revision History: -----------
 **  <author>        <data>        <version >        <desc>

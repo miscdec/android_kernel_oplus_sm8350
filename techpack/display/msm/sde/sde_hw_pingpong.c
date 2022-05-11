@@ -12,6 +12,7 @@
 #include "sde_dbg.h"
 #include "sde_kms.h"
 #include "dsi_display.h"
+#include "oplus_display_private_api.h"
 
 #if defined(OPLUS_FEATURE_PXLW_IRIS5)
 #include "iris/dsi_iris5_api.h"
@@ -327,13 +328,11 @@ static int sde_hw_pp_setup_dither(struct sde_hw_pingpong *pp,
 	struct drm_msm_dither *dither = (struct drm_msm_dither *)cfg;
 	u32 base = 0, offset = 0, data = 0, i = 0;
 
-//#ifdef OPLUS_BUG_STABILITY
 	struct dsi_display *display = get_main_display();
 	if (!display || !display->panel) {
 		pr_err("sde_hw_pp_setup_dither failed to find display panel \n");
 		return -EINVAL;
 	}
-//#endif
 
 	if (!pp)
 		return -EINVAL;
@@ -361,11 +360,19 @@ static int sde_hw_pp_setup_dither(struct sde_hw_pingpong *pp,
 #if defined(OPLUS_FEATURE_PXLW_IRIS5)
 	iris_sde_update_dither_depth_map(dither_depth_map);
 #endif
-	data = dither_depth_map[dither->c0_bitdepth] & REG_MASK(2);
-	data |= (dither_depth_map[dither->c1_bitdepth] & REG_MASK(2)) << 2;
-	data |= (dither_depth_map[dither->c2_bitdepth] & REG_MASK(2)) << 4;
-	data |= (dither_depth_map[dither->c3_bitdepth] & REG_MASK(2)) << 6;
-	data |= (dither->temporal_en) ? (1 << 8) : 0;
+	if(is_support_panel_dither(display->panel->oplus_priv.vendor_name)) {
+		data = 2 & REG_MASK(2);
+		data |= (2 & REG_MASK(2)) << 2;
+		data |= (2 & REG_MASK(2)) << 4;
+		data |= (2 & REG_MASK(2)) << 6;
+		data |=  (1 << 8);
+		} else {
+        data = dither_depth_map[dither->c0_bitdepth] & REG_MASK(2);
+        data |= (dither_depth_map[dither->c1_bitdepth] & REG_MASK(2)) << 2;
+        data |= (dither_depth_map[dither->c2_bitdepth] & REG_MASK(2)) << 4;
+        data |= (dither_depth_map[dither->c3_bitdepth] & REG_MASK(2)) << 6;
+        data |= (dither->temporal_en) ? (1 << 8) : 0;
+		}
 	SDE_REG_WRITE(c, base + offset, data);
 
 	for (i = 0; i < DITHER_MATRIX_SZ - 3; i += 4) {
@@ -376,13 +383,11 @@ static int sde_hw_pp_setup_dither(struct sde_hw_pingpong *pp,
 			((dither->matrix[i + 3] & REG_MASK(4)) << 12);
 		SDE_REG_WRITE(c, base + offset, data);
 	}
-//#ifdef OPLUS_BUG_STABILITY
-	if(strcmp(display->panel->name, "samsung amb655x fhd cmd mode dsc dsi panel") == 0) {
+	if(is_support_panel_dither(display->panel->oplus_priv.vendor_name)) {
 		SDE_REG_WRITE(c, base, 0x11);
 	} else {
 		SDE_REG_WRITE(c, base, 0);
 	}
-//#endif
 	return 0;
 }
 

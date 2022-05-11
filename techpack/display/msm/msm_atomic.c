@@ -19,7 +19,7 @@
 #ifdef OPLUS_BUG_STABILITY
 #include <linux/msm_drm_notify.h>
 #include <linux/notifier.h>
-#endif /* OPLUS_BUG_STABILITY */
+#endif
 
 #include "msm_drv.h"
 #include "msm_gem.h"

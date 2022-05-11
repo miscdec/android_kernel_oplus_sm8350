@@ -22,6 +22,7 @@
 #include <linux/input.h>
 #include <linux/seq_file.h>
 #include <linux/sde_rsc.h>
+#include <linux/ktime.h>
 
 #include "msm_drv.h"
 #include "sde_kms.h"
@@ -158,7 +159,8 @@ void sde_encoder_uidle_enable(struct drm_encoder *drm_enc, bool enable)
 		struct sde_encoder_phys *phys = sde_enc->phys_encs[i];
 
 		if (phys && phys->hw_ctl && phys->hw_ctl->ops.uidle_enable) {
-			SDE_EVT32(DRMID(drm_enc), enable);
+			if (enable)
+				SDE_EVT32(DRMID(drm_enc), enable);
 			phys->hw_ctl->ops.uidle_enable(phys->hw_ctl, enable);
 		}
 	}
@@ -946,9 +948,10 @@ static int _sde_encoder_atomic_check_reserve(struct drm_encoder *drm_enc,
 		ret = sde_rm_reserve(&sde_kms->rm, drm_enc, crtc_state,
 			conn_state, true);
 		if (ret) {
-			SDE_ERROR_ENC(sde_enc,
-				"RM failed to reserve resources, rc = %d\n",
-				ret);
+			if (ret != -EAGAIN)
+				SDE_ERROR_ENC(sde_enc,
+					"RM failed to reserve resources, rc = %d\n",
+					ret);
 			return ret;
 		}
 
@@ -1315,31 +1318,6 @@ static int _sde_encoder_rsc_client_update_vsync_wait(
 	return ret;
 }
 
-static void sde_encoder_wait_for_event_wakeup(struct drm_encoder *drm_enc, int curr_fps)
-{
-	struct sde_encoder_virt *sde_enc;
-	u64 frame_time_ns = 0;
-	ktime_t next_vsync_timestamp, prev_vsync_timestamp;
-
-	sde_enc = to_sde_encoder_virt(drm_enc);
-	if (!sde_enc->cur_master || !curr_fps) {
-		pr_info("invalid args %d %d\n", curr_fps, sde_enc->cur_master);
-		SDE_EVT32(0x1111);
-		return;
-	}
-
-	frame_time_ns =  div_u64(1000000000, curr_fps);
-	prev_vsync_timestamp = sde_encoder_get_last_vsync_ts_cmd(sde_enc->cur_master);
-	prev_vsync_timestamp = ktime_to_ns(prev_vsync_timestamp);
-	next_vsync_timestamp = ktime_add_ns(prev_vsync_timestamp, frame_time_ns);
-	if (ktime_after(next_vsync_timestamp, ktime_get_ns()) &&
-		ktime_sub_ns(next_vsync_timestamp, ktime_get_ns()) < 2000000) {
-		SDE_EVT32(0x1111, prev_vsync_timestamp? prev_vsync_timestamp >> 32 :0,
-			prev_vsync_timestamp? prev_vsync_timestamp & 0xffffffff : 0);
-		msleep(4);
-	}
-}
-
 static int _sde_encoder_update_rsc_client(
 		struct drm_encoder *drm_enc, bool enable)
 {
@@ -1419,12 +1397,6 @@ static int _sde_encoder_update_rsc_client(
 	    (rsc_config->prefill_lines != mode_info->prefill_lines) ||
 	    (rsc_config->jitter_numer != mode_info->jitter_numer) ||
 	    (rsc_config->jitter_denom != mode_info->jitter_denom)) {
-
-		if ((rsc_config->fps != mode_info->frame_rate) &&
-			sde_encoder_check_curr_mode(&sde_enc->base,
-				MSM_DISPLAY_CMD_MODE)) {
-			sde_encoder_wait_for_event_wakeup(drm_enc, rsc_config->fps);
-		}
 
 		rsc_config->fps = mode_info->frame_rate;
 		rsc_config->vtotal = mode_info->vtotal;
@@ -2334,7 +2306,7 @@ static int sde_encoder_virt_modeset_rc(struct drm_encoder *drm_enc,
 		intf_mode = sde_encoder_get_intf_mode(drm_enc);
 		if ((msm_is_mode_seamless_dms(adj_mode) ||
 				msm_is_mode_seamless_dyn_clk(adj_mode)) &&
-				is_cmd_mode) {
+				 is_cmd_mode) {
 			/* restore resource state before releasing them */
 			ret = sde_encoder_resource_control(drm_enc,
 					SDE_ENC_RC_EVENT_PRE_MODESET);
@@ -2711,10 +2683,8 @@ static void _sde_encoder_setup_dither(struct sde_encoder_phys *phys)
 	struct msm_display_dsc_info *dsc = NULL;
 	struct sde_encoder_virt *sde_enc;
 	struct sde_hw_pingpong *hw_pp;
-	//#ifdef OPLUS_BUG_STABILITY
 	struct dsi_display *dsi_display;
 	struct drm_msm_dither dither;
-	//#endif
 	u32 bpp, bpc;
 	int num_lm;
 
@@ -2756,7 +2726,6 @@ static void _sde_encoder_setup_dither(struct sde_encoder_phys *phys)
 	num_lm = sde_rm_topology_get_num_lm(&sde_kms->rm, topology);
 	for (i = 0; i < num_lm; i++) {
   		hw_pp = sde_enc->hw_pp[i];
-//#ifdef OPLUS_BUG_STABILITY
   		if(hw_pp) {
   			dsi_display = get_main_display();
   			  if (len == sizeof(dither) &&
@@ -2774,7 +2743,6 @@ static void _sde_encoder_setup_dither(struct sde_encoder_phys *phys)
   					phys->hw_pp->ops.setup_dither(hw_pp, dither_cfg, len);
   			  }
   		}
-//#endif
   	}
 }
 
@@ -3248,9 +3216,7 @@ static void sde_encoder_underrun_callback(struct drm_encoder *drm_enc,
 
 	trace_sde_encoder_underrun(DRMID(drm_enc),
 		atomic_read(&phy_enc->underrun_cnt));
-#ifdef CONFIG_OPLUS_FEATURE_MM_FEEDBACK
-	SDE_MM_ERROR("DisplayDriverID@@422$$sde encoder underrun callback! Count=%d", atomic_read(&phy_enc->underrun_cnt));
-#endif /* CONFIG_OPLUS_FEATURE_MM_FEEDBACK */
+
 	SDE_DBG_CTRL("stop_ftrace");
 	SDE_DBG_CTRL("panic_underrun");
 
@@ -4168,19 +4134,12 @@ void sde_encoder_needs_hw_reset(struct drm_encoder *drm_enc)
 }
 
 #ifdef OPLUS_BUG_STABILITY
-u32 g_new_bk_level = 0;
+struct oplus_apollo_bk apollo_bk;
 u32 g_oplus_save_pcc = 0;
+
 extern int backlight_smooth_enable;
 
-enum oplus_sync_method {
-	OPLUS_PREPARE_KICKOFF_METHOD = 0,
-	OPLUS_KICKOFF_METHOD,
-	OPLUS_POST_KICKOFF_METHOD,
-	OPLUS_WAIT_VSYNC_METHOD,
-	OPLUS_UNKNOW_METHOD,
-};
-
-int get_current_display_framerate(struct drm_connector *connector)
+static int get_current_display_framerate(struct drm_connector *connector)
 {
 	struct sde_connector *c_conn = to_sde_connector(connector);
 	struct dsi_display *dsi_display = NULL;
@@ -4200,7 +4159,7 @@ int get_current_display_framerate(struct drm_connector *connector)
 	return framerate;
 }
 
-int get_current_display_brightness(struct drm_connector *connector)
+static int get_current_display_brightness(struct drm_connector *connector)
 {
 	struct sde_connector *c_conn = to_sde_connector(connector);
 	struct dsi_display *dsi_display = NULL;
@@ -4220,7 +4179,7 @@ int get_current_display_brightness(struct drm_connector *connector)
 	return brightness_level;
 }
 
-static bool is_support_panel(struct drm_connector *connector)
+static bool is_support_apollo_bk(struct drm_connector *connector)
 {
 	struct sde_connector *c_conn = to_sde_connector(connector);
 	struct dsi_display *dsi_display = NULL;
@@ -4234,27 +4193,41 @@ static bool is_support_panel(struct drm_connector *connector)
 				((dsi_display) ? dsi_display->panel : NULL));
 			return -EINVAL;
 		}
-
-		if (!strcmp(dsi_display->panel->oplus_priv.vendor_name, "S6E3HC3")) {
+		if (dsi_display->panel->oplus_priv.is_apollo_support) {
 			return true;
 		}else {
 			return false;
-
 		}
 	} else {
 		return false;
 	}
 }
 
-bool is_spread_backlight(int level)
+bool is_spread_backlight(struct dsi_display *display, int level)
 {
-	if((level <= 200)&&(level >= 2))
+	if ((display != NULL) && (display->panel != NULL)
+		&& (level <= display->panel->oplus_priv.sync_brightness_level) && (level >= 2)) {
 		return true;
-	else
+	} else {
 		return false;
+	}
 }
 
-int oplus_backlight_wait_vsync(struct drm_encoder *drm_enc)
+void update_pending_backlight(struct dsi_display *display, int level) {
+	if (display == NULL) {
+		return;
+	}
+
+	if (!strcmp(display->display_type, "primary")) {
+		apollo_bk.g_pri_bk_level = level;
+	} else if (!strcmp(display->display_type, "secondary")) {
+		apollo_bk.g_sec_bk_level = level;
+	} else {
+		// Ignore
+	}
+}
+
+static int oplus_backlight_wait_vsync(struct drm_encoder *drm_enc)
 {
 	SDE_ATRACE_BEGIN("wait_vsync");
 
@@ -4276,12 +4249,63 @@ int oplus_backlight_wait_vsync(struct drm_encoder *drm_enc)
 	return 0;
 }
 
-int oplus_sync_panel_brightness(enum oplus_sync_method method, void *phys_enc)
+static int oplus_setbacklight_by_display_type(struct drm_encoder *drm_enc) {
+	struct sde_encoder_virt *sde_enc = NULL;
+	struct dsi_display *display = NULL;
+	struct sde_connector *c_conn = NULL;
+	int rc = 0;
+	char tag_name[64];
+
+	if (drm_enc == NULL)
+		return -EFAULT;
+
+	sde_enc = to_sde_encoder_virt(drm_enc);
+	if (sde_enc == NULL)
+		return -EFAULT;
+
+	c_conn = to_sde_connector(sde_enc->phys_encs[0]->connector);
+	if (c_conn == NULL)
+		return -EFAULT;
+	if (c_conn->connector_type != DRM_MODE_CONNECTOR_DSI)
+		return 0;
+
+	display = c_conn->display;
+	if (display == NULL)
+		return -EFAULT;
+
+	if (!strcmp(display->display_type, "primary")) {
+		snprintf(tag_name, sizeof(tag_name), "primary: %d", apollo_bk.g_pri_bk_level);
+		SDE_ATRACE_BEGIN(tag_name);
+		rc = c_conn->ops.set_backlight(&c_conn->base, display, apollo_bk.g_pri_bk_level);
+		SDE_ATRACE_END(tag_name);
+	} else if (!strcmp(display->display_type, "secondary")) {
+		snprintf(tag_name, sizeof(tag_name), "secondary: %d", apollo_bk.g_sec_bk_level);
+		SDE_ATRACE_BEGIN(tag_name);
+		rc = c_conn->ops.set_backlight(&c_conn->base, display, apollo_bk.g_sec_bk_level);
+		SDE_ATRACE_END(tag_name);
+	}
+
+	return rc;
+}
+
+#define to_sde_encoder_phys_cmd(x) \
+	container_of(x, struct sde_encoder_phys_cmd, base)
+
+int oplus_sync_panel_brightness(enum oplus_sync_method method, struct drm_encoder *drm_enc)
 {
-	struct sde_encoder_phys *phys_encoder = phys_enc;
+	struct sde_encoder_virt *sde_enc = NULL;
+	struct sde_encoder_phys *phys_encoder = NULL;
 	struct sde_connector *c_conn = NULL;
 	struct dsi_display *display = NULL;
 	int rc = 0;
+	struct sde_encoder_phys_cmd *cmd_enc = NULL;
+	struct sde_encoder_phys_cmd_te_timestamp *te_timestamp;
+	s64 us_per_frame;
+	ktime_t last_te_timestamp;
+	s64 delay;
+
+	sde_enc = to_sde_encoder_virt(drm_enc);
+	phys_encoder = sde_enc->phys_encs[0];
 
 	if (phys_encoder == NULL)
 		return -EFAULT;
@@ -4299,29 +4323,48 @@ int oplus_sync_panel_brightness(enum oplus_sync_method method, void *phys_enc)
 	if (display == NULL)
 		return -EFAULT;
 
-	pr_debug("backlight smooth for global_bl_level = %d,g_oplus_save_pcc = %d, sync_method = %d\n",g_new_bk_level, g_oplus_save_pcc,method);
+	cmd_enc = to_sde_encoder_phys_cmd(phys_encoder);
+	if (cmd_enc == NULL) {
+		return -EFAULT;
+	}
 
-	SDE_ATRACE_BEGIN("sync_panel_brightness");
+	us_per_frame = 1000000 / get_current_display_framerate(sde_enc->cur_master->connector);
+	te_timestamp = list_last_entry(&cmd_enc->te_timestamp_list, struct sde_encoder_phys_cmd_te_timestamp, list);
+	last_te_timestamp = te_timestamp->timestamp;
+
+	if ((!strcmp(display->display_type, "primary") &&
+			is_spread_backlight(display, apollo_bk.g_pri_bk_level) &&
+			(apollo_bk.g_pri_bk_level != get_current_display_brightness(sde_enc->cur_master->connector))) ||
+		(!strcmp(display->display_type, "secondary") &&
+			is_spread_backlight(display, apollo_bk.g_sec_bk_level) &&
+			(apollo_bk.g_sec_bk_level != get_current_display_brightness(sde_enc->cur_master->connector)))) {
+		SDE_ATRACE_BEGIN("sync_panel_brightness");
+		delay = (us_per_frame >> 1) - (ktime_to_us(ktime_sub(ktime_get(), last_te_timestamp)) % us_per_frame);
+		if (delay > 0) {
+			usleep_range(delay, delay + 100);
+		}
+		pr_debug("us_per_frame = %lld, delta = %lld, delay = %lld",	\
+				us_per_frame, ktime_to_us(ktime_sub(ktime_get(), last_te_timestamp)), delay);
+		if ((ktime_to_us(ktime_sub(ktime_get(), last_te_timestamp)) % us_per_frame) > (us_per_frame - 500)) {
+			usleep_range(500, 1000);
+		}
 		if (method == OPLUS_PREPARE_KICKOFF_METHOD) {
-			rc = c_conn->ops.set_backlight(&c_conn->base,
-					display, g_new_bk_level);
+			rc = oplus_setbacklight_by_display_type(drm_enc);
 			c_conn->unset_bl_level = 0;
-			usleep_range(100, 200);
 		} else if(method == OPLUS_POST_KICKOFF_METHOD) {
-			usleep_range(4000, 4100);
-			rc = c_conn->ops.set_backlight(&c_conn->base,
-					display, g_new_bk_level);
+			rc = oplus_setbacklight_by_display_type(drm_enc);
 			c_conn->unset_bl_level = 0;
 		} else {
 			oplus_backlight_wait_vsync(c_conn->encoder);
-			rc = c_conn->ops.set_backlight(&c_conn->base,
-					display, g_new_bk_level);
+			rc = oplus_setbacklight_by_display_type(drm_enc);
 			c_conn->unset_bl_level = 0;
 		}
 		SDE_ATRACE_END("sync_panel_brightness");
+	}
+
 	return rc;
 }
-#endif
+#endif /* OPLUS_BUG_STABILITY */
 
 int sde_encoder_prepare_for_kickoff(struct drm_encoder *drm_enc,
 		struct sde_encoder_kickoff_params *params)
@@ -4362,25 +4405,14 @@ int sde_encoder_prepare_for_kickoff(struct drm_encoder *drm_enc,
 			} else {
 				display = c_conn->display;
 				if(display && display->panel && display->panel->oplus_priv.vendor_name) {
-					if (strcmp(display->panel->oplus_priv.vendor_name, "AMB655X") && strcmp(display->panel->oplus_priv.vendor_name, "AMB670YF01")) {
+					if (strcmp(display->panel->oplus_priv.vendor_name, "AMB655X") && strcmp(display->panel->oplus_priv.vendor_name, "AMB670YF01") &&
+						strcmp(display->panel->oplus_priv.vendor_name, "AMS662ZS01")) {
 						sde_connector_update_hbm(sde_enc->cur_master->connector);
 					}
 				}
 			}
 		}
 	}
-#endif /* OPLUS_BUG_STABILITY */
-
-#ifdef OPLUS_BUG_STABILITY
-		if((is_support_panel(sde_enc->cur_master->connector) == true) && backlight_smooth_enable){
-			if(sde_enc->num_phys_encs > 0 ) {
-				if ((get_current_display_framerate(sde_enc->cur_master->connector) >= 75) && is_spread_backlight(g_new_bk_level)) {
-					if(g_new_bk_level != get_current_display_brightness(sde_enc->cur_master->connector)){
-						oplus_sync_panel_brightness(OPLUS_PREPARE_KICKOFF_METHOD, sde_enc->phys_encs[0]);
-					}
-				}
-			}
-		}
 #endif /* OPLUS_BUG_STABILITY */
 
 	is_cmd_mode = sde_encoder_check_curr_mode(drm_enc,
@@ -4426,7 +4458,6 @@ int sde_encoder_prepare_for_kickoff(struct drm_encoder *drm_enc,
 							true);
 
 #ifdef OPLUS_BUG_STABILITY
-				// fix qsync bug from case 04843535
 				if (oplus_adfr_is_support()) {
 					if (sde_enc->disp_info.display_type == SDE_CONNECTOR_PRIMARY)
 						_sde_encoder_update_rsc_client(drm_enc, true);
@@ -4572,13 +4603,9 @@ void sde_encoder_kickoff(struct drm_encoder *drm_enc, bool is_error,
 	}
 
 #ifdef OPLUS_BUG_STABILITY
-	if((is_support_panel(sde_enc->cur_master->connector) == true)&& backlight_smooth_enable) {
-		if(sde_enc->num_phys_encs > 0 ) {
-			if ((get_current_display_framerate(sde_enc->cur_master->connector) < 75) && is_spread_backlight(g_new_bk_level)){
-				if(g_new_bk_level != get_current_display_brightness(sde_enc->cur_master->connector)){
-				 oplus_sync_panel_brightness(OPLUS_POST_KICKOFF_METHOD, sde_enc->phys_encs[0]);
-				}
-			}
+	if ((is_support_apollo_bk(sde_enc->cur_master->connector) == true) && backlight_smooth_enable) {
+		if (sde_enc->num_phys_encs > 0 ) {
+			oplus_sync_panel_brightness(OPLUS_POST_KICKOFF_METHOD, drm_enc);
 		}
 	}
 #endif /* OPLUS_BUG_STABILITY */
@@ -4608,7 +4635,7 @@ void sde_encoder_kickoff(struct drm_encoder *drm_enc, bool is_error,
 	SDE_ATRACE_END("encoder_kickoff");
 #ifdef OPLUS_BUG_STABILITY
 	sde_connector_update_backlight(sde_enc->cur_master->connector, true);
-#endif /* OPLUS_BUG_STABILITY */
+#endif
 }
 
 void sde_encoder_helper_get_pp_line_count(struct drm_encoder *drm_enc,
@@ -5880,8 +5907,6 @@ void sde_encoder_enable_recovery_event(struct drm_encoder *encoder)
 }
 
 #ifdef OPLUS_BUG_STABILITY
-
-// queue the fakeframe work to adfr worker
 int sde_encoder_adfr_trigger_fakeframe(void *enc)
 {
 	struct drm_encoder *drm_enc = enc;

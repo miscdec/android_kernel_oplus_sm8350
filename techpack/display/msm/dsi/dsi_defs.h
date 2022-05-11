@@ -31,14 +31,15 @@
 #define DSI_DEBUG(fmt, ...)	DRM_DEV_DEBUG(NULL, "[msm-dsi-debug]: "fmt, \
 								##__VA_ARGS__)
 
-#ifdef CONFIG_OPLUS_FEATURE_MM_FEEDBACK
+#ifdef OPLUS_BUG_STABILITY
 #include <soc/oplus/system/oplus_mm_kevent_fb.h>
 #define DSI_MM_ERR(fmt, ...)	\
 	do { \
 			DRM_DEV_ERROR(NULL, "[msm-dsi-error]: " fmt, ##__VA_ARGS__); \
 			mm_fb_display_kevent_named(MM_FB_KEY_RATELIMIT_1H, fmt, ##__VA_ARGS__); \
 		} while(0)
-#endif /* CONFIG_OPLUS_FEATURE_MM_FEEDBACK */
+#endif
+
 /**
  * enum dsi_pixel_format - DSI pixel formats
  * @DSI_PIXEL_FORMAT_RGB565:
@@ -335,6 +336,13 @@ enum dsi_cmd_set_type {
 	DSI_CMD_LOADING_EFFECT_OFF,
 	DSI_CMD_LOADING_EFFECT_OFF_ID6,
 	DSI_CMD_HBM_ENTER_SWITCH,
+	DSI_CMD_HBM_START0_SWITCH,
+	DSI_CMD_HBM_START1_SWITCH,
+	DSI_CMD_HBM_START2_SWITCH,
+	DSI_CMD_HBM_END0_SWITCH,
+	DSI_CMD_HBM_END1_SWITCH,
+	DSI_CMD_HBM_END2_SWITCH,
+	DSI_CMD_HBM_END3_SWITCH,
 	DSI_CMD_HBM_EXIT_SWITCH,
 	DSI_CMD_HBM_AOR_RESTORE,
 	DSI_CMD_SET_LP1_PVT,  /*DSI_CMD_SET_LP1*/
@@ -364,10 +372,6 @@ enum dsi_cmd_set_type {
 	DSI_CMD_SEED_DC_MODE0,
 	DSI_CMD_SEED_DC_MODE1,
 	DSI_CMD_SEED_DC_MODE2,
-	DSI_CMD_CABC_OFF,
-	DSI_CMD_CABC_UI,
-	DSI_CMD_CABC_IMAGE,
-	DSI_CMD_CABC_VIDEO,
 #endif
 
 	DSI_CMD_SET_MAX
@@ -718,14 +722,12 @@ struct dsi_display_mode_priv_info {
 #ifdef OPLUS_BUG_STABILITY
 	int fod_on_vblank;
 	int fod_off_vblank;
-#endif /* OPLUS_BUG_STABILITY */
+#endif
 
 #ifdef OPLUS_BUG_STABILITY
 	u32 qsync_min_fps_sets_size;
 	u32 qsync_min_fps_sets[DSI_CMD_QSYNC_MIN_FPS_COUNTS];
 	u32 current_qsync_mode;
-	// fakeframe_config: 0st Bit:firsttime 1st Bit:secondtime, 1:enable 0:disable
-	// for example, 3 mean both first and second time should send fake frame
 	u32 fakeframe_config;
 	u32 deferred_fakeframe_time;
 #endif
@@ -770,8 +772,8 @@ struct dsi_rect {
  * @result: result rectangle, all 0's on no intersection found
  */
 void dsi_rect_intersect(const struct dsi_rect *r1,
-			const struct dsi_rect *r2,
-			struct dsi_rect *result);
+		const struct dsi_rect *r2,
+		struct dsi_rect *result);
 
 /**
  * dsi_rect_is_equal - compares two rects
@@ -781,10 +783,10 @@ void dsi_rect_intersect(const struct dsi_rect *r1,
  * Returns true if the rects are same
  */
 static inline bool dsi_rect_is_equal(struct dsi_rect *r1,
-				     struct dsi_rect *r2)
+		struct dsi_rect *r2)
 {
 	return r1->x == r2->x && r1->y == r2->y && r1->w == r2->w &&
-	       r1->h == r2->h;
+			r1->h == r2->h;
 }
 
 struct dsi_event_cb_info {
@@ -792,9 +794,9 @@ struct dsi_event_cb_info {
 	void *event_usr_ptr;
 
 	int (*event_cb)(void *event_usr_ptr,
-			uint32_t event_idx, uint32_t instance_idx,
-			uint32_t data0, uint32_t data1,
-			uint32_t data2, uint32_t data3);
+		uint32_t event_idx, uint32_t instance_idx,
+		uint32_t data0, uint32_t data1,
+		uint32_t data2, uint32_t data3);
 };
 
 /**
@@ -834,24 +836,18 @@ static inline int dsi_pixel_format_to_bpp(enum dsi_pixel_format fmt)
 	case DSI_PIXEL_FORMAT_RGB888:
 	case DSI_PIXEL_FORMAT_MAX:
 		return 24;
-
 	case DSI_PIXEL_FORMAT_RGB666:
 	case DSI_PIXEL_FORMAT_RGB666_LOOSE:
 		return 18;
-
 	case DSI_PIXEL_FORMAT_RGB565:
 		return 16;
-
 	case DSI_PIXEL_FORMAT_RGB111:
 		return 3;
-
 	case DSI_PIXEL_FORMAT_RGB332:
 		return 8;
-
 	case DSI_PIXEL_FORMAT_RGB444:
 		return 12;
 	}
-
 	return 24;
 }
 
@@ -861,10 +857,8 @@ static inline u64 dsi_h_active_dce(struct dsi_mode_info *mode)
 
 	if (mode->dsc_enabled && mode->dsc)
 		h_active = mode->dsc->pclk_per_line;
-
 	else if (mode->vdc_enabled && mode->vdc)
 		h_active = mode->vdc->pclk_per_line;
-
 	else
 		h_active = mode->h_active;
 
@@ -876,7 +870,7 @@ static inline u64 dsi_h_total_dce(struct dsi_mode_info *mode)
 	u64 h_total = dsi_h_active_dce(mode);
 
 	h_total += mode->h_back_porch + mode->h_front_porch +
-		   mode->h_sync_width;
+			mode->h_sync_width;
 	return h_total;
 }
 

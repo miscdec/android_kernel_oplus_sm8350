@@ -1,6 +1,6 @@
 /***************************************************************
 ** Copyright (C),  2020,  OPLUS Mobile Comm Corp.,  Ltd
-** VENDOR_EDIT
+**
 ** File : oplus_dsi_support.c
 ** Description : display driver private management
 ** Version : 1.1
@@ -12,9 +12,9 @@
 **   LiPing-M         2020/09/06        1.1           Build this moudle
 ******************************************************************/
 #include "oplus_dsi_support.h"
-#include <soc/oppo/boot_mode.h>
-#include <soc/oppo/oppo_project.h>
-#include <soc/oppo/device_info.h>
+#include <soc/oplus/system/boot_mode.h>
+#include <soc/oplus/system/oplus_project.h>
+#include <soc/oplus/device_info.h>
 #include <linux/notifier.h>
 #include <linux/module.h>
 
@@ -55,7 +55,7 @@ bool is_oplus_correct_display(enum oplus_display_support_list lcd_name)
 
 bool is_silence_reboot(void)
 {
-	if ((MSM_BOOT_MODE__SILENCE == get_boot_mode())
+	if ((MSM_BOOT_MODE__SE == get_boot_mode())
 			|| (MSM_BOOT_MODE__SAU == get_boot_mode())) {
 		return true;
 
@@ -76,9 +76,9 @@ int set_oplus_display_vendor(const char *display_name)
 		oplus_display_vendor = OPLUS_SAMSUNG_ANA6706_DISPLAY_FHD_DSC_CMD_PANEL;
 		//register_device_proc("lcd", "ANA6706", "samsung1024");
 
-	} else if (!strcmp(display_name, "qcom,mdss_dsi_samsung_oneplus_dsc_cmd")) {
-		oplus_display_vendor = OPLUS_SAMSUNG_ONEPLUS_DISPLAY_FHD_DSC_CMD_PANEL;
-		//register_device_proc("lcd", "oneplus", "samsung1024");
+	} else if (!strcmp(display_name, "qcom,mdss_dsi_samsung_oplus_dsc_cmd")) {
+		oplus_display_vendor = OPLUS_SAMSUNG_DISPLAY_FHD_DSC_CMD_PANEL;
+		/*register_device_proc("lcd", "oplus", "samsung1024");*/
 
 	} else {
 		oplus_display_vendor = OPLUS_DISPLAY_UNKNOW;

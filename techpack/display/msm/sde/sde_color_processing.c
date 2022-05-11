@@ -3324,7 +3324,6 @@ static void sde_cp_hist_interrupt_cb(void *arg, int irq_idx)
 		if (hw_dspp && hw_dspp->ops.lock_histogram)
 			hw_dspp->ops.lock_histogram(hw_dspp, &lock_hist);
 	}
-	crtc->hist_irq_idx = irq_idx;
 
 	crtc->hist_irq_idx = irq_idx;
 	/* notify histogram event */

@@ -1,11 +1,11 @@
 /***************************************************************
 ** Copyright (C),  2020,  OPLUS Mobile Comm Corp.,  Ltd
-** VENDOR_EDIT
+**
 ** File : oplus_onscreenfingerprint.c
 ** Description : oplus onscreenfingerprint feature
 ** Version : 1.0
 ** Date : 2020/04/15
-** Author : Qianxu@MM.Display.LCD Driver
+** Author :
 **
 ** ------------------------------- Revision History: -----------
 **  <author>        <data>        <version >        <desc>
@@ -39,6 +39,12 @@ extern int hbm_mode;
 extern bool oplus_ffl_trigger_finish;
 extern struct oplus_apollo_backlight_list *p_apollo_backlight;
 extern int dynamic_osc_clock;
+extern int oplus_dimlayer_hbm_vblank_count;
+extern atomic_t oplus_dimlayer_hbm_vblank_ref;
+extern int oplus_onscreenfp_status;
+extern u32 oplus_onscreenfp_vblank_count;
+extern ktime_t oplus_onscreenfp_pressed_time;
+
 
 static struct oplus_brightness_alpha brightness_alpha_lut[] = {
 	{0, 0xff},
@@ -417,10 +423,6 @@ int dsi_panel_parse_oplus_config(struct dsi_panel *panel)
 	DSI_INFO("is_pxlw_iris5: %s",
 		 panel->oplus_priv.is_pxlw_iris5 ? "true" : "false");
 
-	apollo_backlight_enable = utils->read_bool(utils->data,
-				"oplus,apollo_backlight_enable");
-	DSI_INFO("apollo_backlight_enable: %s", apollo_backlight_enable ? "true" : "false");
-
 	panel->oplus_priv.is_osc_support = utils->read_bool(utils->data, "oplus,osc-support");
 	pr_info("[%s]osc mode support: %s", __func__, panel->oplus_priv.is_osc_support ? "Yes" : "Not");
 
@@ -431,7 +433,7 @@ int dsi_panel_parse_oplus_config(struct dsi_panel *panel)
 			pr_err("[%s]failed get panel parameter: oplus,mdss-dsi-osc-clk-mode0-rate\n", __func__);
 			panel->oplus_priv.osc_clk_mode0_rate = 0;
 		}
-		//dynamic_osc_clock = panel->oplus_priv.osc_clk_mode0_rate;
+		dynamic_osc_clock = panel->oplus_priv.osc_clk_mode0_rate;
 
 		ret = utils->read_u32(utils->data, "oplus,mdss-dsi-osc-clk-mode1-rate",
 					&panel->oplus_priv.osc_clk_mode1_rate);
@@ -439,7 +441,31 @@ int dsi_panel_parse_oplus_config(struct dsi_panel *panel)
 			pr_err("[%s]failed get panel parameter: oplus,mdss-dsi-osc-clk-mode1-rate\n", __func__);
 			panel->oplus_priv.osc_clk_mode1_rate = 0;
 		}
-        dynamic_osc_clock = panel->oplus_priv.osc_clk_mode1_rate;
+	}
+
+	/* Add for apollo */
+	ret = utils->read_u32(utils->data, "oplus,apollo-sync-brightness-level",
+				&panel->oplus_priv.sync_brightness_level);
+	if (ret) {
+		pr_info("[%s] failed to get panel parameter: oplus,apollo-sync-brightness-level\n", __func__);
+		/* Default sync brightness level is set to 200 */
+		panel->oplus_priv.sync_brightness_level = 200;
+	}
+
+	/* Add for apollo */
+	panel->oplus_priv.is_apollo_support = utils->read_bool(utils->data, "oplus,apollo_backlight_enable");
+	apollo_backlight_enable = panel->oplus_priv.is_apollo_support;
+	DSI_INFO("apollo_backlight_enable: %s", panel->oplus_priv.is_apollo_support ? "true" : "false");
+
+	if (panel->oplus_priv.is_apollo_support) {
+		ret = utils->read_u32(utils->data, "oplus,apollo-sync-brightness-level",
+				&panel->oplus_priv.sync_brightness_level);
+
+		if (ret) {
+			pr_info("[%s] failed to get panel parameter: oplus,apollo-sync-brightness-level\n", __func__);
+			/* Default sync brightness level is set to 200 */
+			panel->oplus_priv.sync_brightness_level = 200;
+		}
 	}
 
 	if (oplus_adfr_is_support()) {
@@ -450,33 +476,6 @@ int dsi_panel_parse_oplus_config(struct dsi_panel *panel)
 			panel->cur_h_active = 1080;
 		}
 	}
-
-	panel->oplus_priv.pre_bl_delay_enabled = utils->read_bool(utils->data,
-			"oplus,mdss-dsi-pre-bl-delay-enabled");
-	DSI_INFO("oplus,mdss-dsi-pre-bl-delay-enabled: %s",
-			panel->oplus_priv.pre_bl_delay_enabled ? "true" : "false");
-	if (panel->oplus_priv.pre_bl_delay_enabled) {
-		ret = utils->read_u32(utils->data, "oplus,mdss-dsi-pre-bl-delay-ms",
-				&panel->oplus_priv.pre_bl_delay_ms);
-		if (ret) {
-			pr_err("[%s]failed get panel parameter: oplus,mdss-dsi-pre-bl-delay-ms\n", __func__);
-			panel->oplus_priv.pre_bl_delay_ms = 0;
-		}
-	}
-
-	panel->oplus_priv.dp_support = utils->read_bool(utils->data,
-			"oplus,mdss-dsi-dp-support");
-	DSI_INFO("oplus,mdss-dsi-dp-support: %s",
-			panel->oplus_priv.dp_support ? "true" : "false");
-
-	panel->oplus_priv.cabc_enabled = utils->read_bool(utils->data,
-			"oplus,mdss-dsi-cabc-enabled");
-	DSI_INFO("oplus,mdss-dsi-cabc-enabled: %s",
-			panel->oplus_priv.cabc_enabled ? "true" : "false");
-	panel->oplus_priv.lp_config_flag = utils->read_bool(utils->data,
-                        "oplus,mdss-dsi-lp-config-flag");
-        DSI_INFO("oplus,mdss-dsi-lp-config-flag: %s",
-                        panel->oplus_priv.lp_config_flag ? "true" : "false");
 
 	return 0;
 }
@@ -655,4 +654,200 @@ int sde_plane_check_fingerprint_layer(const struct drm_plane_state *drm_state)
 	return sde_plane_get_property(pstate, PLANE_PROP_CUSTOM);
 }
 EXPORT_SYMBOL(sde_plane_check_fingerprint_layer);
+
+int oplus_display_panel_get_dimlayer_hbm(void *data)
+{
+	uint32_t *dimlayer_hbm = data;
+
+	(*dimlayer_hbm) = oplus_dimlayer_hbm;
+
+	return 0;
+}
+
+int oplus_display_panel_set_dimlayer_hbm(void *data)
+{
+	struct dsi_display *display = get_main_display();
+	struct drm_connector *dsi_connector = display->drm_conn;
+	uint32_t *dimlayer_hbm = data;
+	int err = 0;
+	int value = (*dimlayer_hbm);
+
+	value = !!value;
+	if (oplus_dimlayer_hbm == value)
+		return 0;
+	if (!dsi_connector || !dsi_connector->state || !dsi_connector->state->crtc) {
+		pr_err("[%s]: display not ready\n", __func__);
+	} else {
+		err = drm_crtc_vblank_get(dsi_connector->state->crtc);
+		if (err) {
+			pr_err("failed to get crtc vblank, error=%d\n", err);
+		} else {
+			/* do vblank put after 5 frames */
+			oplus_dimlayer_hbm_vblank_count = 5;
+			atomic_inc(&oplus_dimlayer_hbm_vblank_ref);
+		}
+	}
+	oplus_dimlayer_hbm = value;
+
+	return 0;
+}
+
+int oplus_display_panel_notify_fp_press(void *data)
+{
+	struct dsi_display *display = get_main_display();
+	struct drm_device *drm_dev = display->drm_dev;
+	struct drm_connector *dsi_connector = display->drm_conn;
+	struct drm_mode_config *mode_config = &drm_dev->mode_config;
+	struct msm_drm_private *priv = drm_dev->dev_private;
+	struct drm_atomic_state *state;
+	struct drm_crtc_state *crtc_state;
+	struct drm_crtc *crtc;
+	int onscreenfp_status = 0;
+	int vblank_get = -EINVAL;
+	int err = 0;
+	int i;
+	bool if_con = false;
+	uint32_t *p_onscreenfp_status = data;
+
+#ifdef OPLUS_FEATURE_AOD_RAMLESS
+	struct drm_display_mode *cmd_mode = NULL;
+	struct drm_display_mode *vid_mode = NULL;
+	struct drm_display_mode *mode = NULL;
+	bool mode_changed = false;
+#endif
+
+	if (!dsi_connector || !dsi_connector->state || !dsi_connector->state->crtc) {
+		pr_err("[%s]: display not ready\n", __func__);
+		return -EINVAL;
+	}
+
+	onscreenfp_status = (*p_onscreenfp_status);
+
+	onscreenfp_status = !!onscreenfp_status;
+	if (onscreenfp_status == oplus_onscreenfp_status)
+		return 0;
+
+	pr_err("notify fingerpress %s\n", onscreenfp_status ? "on" : "off");
+
+	vblank_get = drm_crtc_vblank_get(dsi_connector->state->crtc);
+	if (vblank_get) {
+		pr_err("failed to get crtc vblank\n", vblank_get);
+	}
+	oplus_onscreenfp_status = onscreenfp_status;
+
+	if (!strcmp(display->panel->oplus_priv.vendor_name, "S6E3HC3") ||
+		!strcmp(display->panel->oplus_priv.vendor_name, "AMS662ZS01"))
+		if_con = false;
+	else
+		if_con = onscreenfp_status && (OPLUS_DISPLAY_AOD_SCENE == get_oplus_display_scene());
+#ifdef OPLUS_FEATURE_AOD_RAMLESS
+	if_con = if_con && !display->panel->oplus_priv.is_aod_ramless;
+#endif
+	if (if_con) {
+		/* enable the clk vote for CMD mode panels */
+		if (display->config.panel_mode == DSI_OP_CMD_MODE) {
+			dsi_display_clk_ctrl(display->dsi_clk_handle,
+					DSI_ALL_CLKS, DSI_CLK_ON);
+		}
+
+		mutex_lock(&display->panel->panel_lock);
+
+		if (display->panel->panel_initialized)
+			err = dsi_panel_tx_cmd_set(display->panel, DSI_CMD_AOD_HBM_ON);
+
+		mutex_unlock(&display->panel->panel_lock);
+		if (err)
+			pr_err("failed to setting aod hbm on mode %d\n", err);
+
+		if (display->config.panel_mode == DSI_OP_CMD_MODE) {
+			dsi_display_clk_ctrl(display->dsi_clk_handle,
+					DSI_ALL_CLKS, DSI_CLK_OFF);
+		}
+	}
+#ifdef OPLUS_FEATURE_AOD_RAMLESS
+	if (!display->panel->oplus_priv.is_aod_ramless) {
+#endif
+		oplus_onscreenfp_vblank_count = drm_crtc_vblank_count(
+			dsi_connector->state->crtc);
+		oplus_onscreenfp_pressed_time = ktime_get();
+#ifdef OPLUS_FEATURE_AOD_RAMLESS
+	}
+#endif
+
+	drm_modeset_lock_all(drm_dev);
+
+	state = drm_atomic_state_alloc(drm_dev);
+	if (!state)
+		goto error;
+
+	state->acquire_ctx = mode_config->acquire_ctx;
+	crtc = dsi_connector->state->crtc;
+	crtc_state = drm_atomic_get_crtc_state(state, crtc);
+	for (i = 0; i < priv->num_crtcs; i++) {
+		if (priv->disp_thread[i].crtc_id == crtc->base.id) {
+			if (priv->disp_thread[i].thread)
+				kthread_flush_worker(&priv->disp_thread[i].worker);
+		}
+	}
+
+#ifdef OPLUS_FEATURE_AOD_RAMLESS
+	if (display->panel->oplus_priv.is_aod_ramless) {
+		struct drm_display_mode *set_mode = NULL;
+
+		if (oplus_display_mode == 2)
+			goto error;
+
+		list_for_each_entry(mode, &dsi_connector->modes, head) {
+			if (drm_mode_vrefresh(mode) == 0)
+				continue;
+			if (mode->flags & DRM_MODE_FLAG_VID_MODE_PANEL)
+				vid_mode = mode;
+			if (mode->flags & DRM_MODE_FLAG_CMD_MODE_PANEL)
+				cmd_mode = mode;
+		}
+
+		set_mode = oplus_display_mode ? vid_mode : cmd_mode;
+		set_mode = onscreenfp_status ? vid_mode : set_mode;
+		if (!crtc_state->active || !crtc_state->enable)
+			goto error;
+
+		if (set_mode && drm_mode_vrefresh(set_mode) != drm_mode_vrefresh(&crtc_state->mode)) {
+			mode_changed = true;
+		} else {
+			mode_changed = false;
+		}
+
+		if (mode_changed) {
+			display->panel->dyn_clk_caps.dyn_clk_support = false;
+			drm_atomic_set_mode_for_crtc(crtc_state, set_mode);
+		}
+
+		wake_up(&oplus_aod_wait);
+	}
+#endif
+
+	err = drm_atomic_commit(state);
+	drm_atomic_state_put(state);
+
+#ifdef OPLUS_FEATURE_AOD_RAMLESS
+	if (display->panel->oplus_priv.is_aod_ramless && mode_changed) {
+		for (i = 0; i < priv->num_crtcs; i++) {
+			if (priv->disp_thread[i].crtc_id == crtc->base.id) {
+				if (priv->disp_thread[i].thread) {
+					kthread_flush_worker(&priv->disp_thread[i].worker);
+				}
+			}
+		}
+		if (oplus_display_mode == 1)
+			display->panel->dyn_clk_caps.dyn_clk_support = true;
+	}
+#endif
+
+error:
+	drm_modeset_unlock_all(drm_dev);
+	if (!vblank_get)
+		drm_crtc_vblank_put(dsi_connector->state->crtc);
+
+	return 0;
+}
 

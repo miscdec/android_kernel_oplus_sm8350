@@ -230,7 +230,6 @@ int sde_dsc_populate_dsc_config(struct drm_dsc_config *dsc, int scr_ver) {
 
 	dsc->rc_model_size = 8192;
 
-//#ifdef OPLUS_BUG_STABILITY
 	if ((dsc->dsc_version_major == 0x1) && (dsc->dsc_version_minor == 0x1)) {
 		if (scr_ver == 0x1)
 			dsc->first_line_bpg_offset = 15;
@@ -243,7 +242,6 @@ int sde_dsc_populate_dsc_config(struct drm_dsc_config *dsc, int scr_ver) {
 	} else if (dsc->dsc_version_minor == 0x2) {
 			dsc->first_line_bpg_offset = _get_dsc_v1_2_bpg_offset(dsc);
 	}
-//#endif
 
 	dsc->rc_edge_factor = 6;
 	dsc->rc_tgt_offset_high = 3;
@@ -549,12 +547,10 @@ int sde_dsc_create_pps_buf_cmd(struct msm_display_dsc_info *dsc_info,
 	}
 
 	if (dsc->dsc_version_minor == 0x2) {
-//#ifdef OPLUS_BUG_STABILITY
 		if (dsc->native_422)
 			data = BIT(0);
 		else if (dsc->native_420)
 			data = BIT(1);
-//#endif
 		*bp++ = data;				/* pps88 */
 		*bp++ = dsc->second_line_bpg_offset;	/* pps89 */
 

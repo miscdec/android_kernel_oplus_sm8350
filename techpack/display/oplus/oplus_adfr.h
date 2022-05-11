@@ -1,11 +1,11 @@
 /***************************************************************
 ** Copyright (C),  2020,  OPLUS Mobile Comm Corp.,  Ltd
-** VENDOR_EDIT
+**
 ** File : oplus_adfr.h
 ** Description : ADFR kernel module
 ** Version : 1.0
 ** Date : 2020/10/23
-** Author : CaiHuiyue@MM.Display
+** Author :
 **
 ** ------------------------------- Revision History: -----------
 **  <author>        <data>        <version >        <desc>
@@ -15,7 +15,6 @@
 #ifndef _OPLUS_ADFR_H_
 #define _OPLUS_ADFR_H_
 
-// please just only include linux common head file to keep me pure
 #include <linux/device.h>
 #include <linux/hrtimer.h>
 
