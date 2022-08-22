@@ -152,7 +152,7 @@
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
-#elif IS_ENABLED(CONFIG_DRM_MSM) || IS_ENABLED(CONFIG_DRM_OPLUS_NOTIFY)
+#elif IS_ENABLED(CONFIG_QCOM_KGSL) || IS_ENABLED(CONFIG_DRM_OPLUS_NOTIFY)
 #include <linux/msm_drm_notify.h>
 #elif IS_ENABLED(CONFIG_FB)
 #include <linux/notifier.h>
@@ -1099,7 +1099,12 @@ struct oplus_chg_chip {
 	bool fg_bcl_poll;
 	bool chg_powersave;
 	bool healthd_ready;
+<<<<<<< HEAD
 #if IS_ENABLED(CONFIG_FB) || IS_ENABLED(CONFIG_DRM_MSM) || IS_ENABLED(CONFIG_DRM_OPLUS_NOTIFY)
+=======
+#if IS_ENABLED(CONFIG_FB) || IS_ENABLED(CONFIG_QCOM_KGSL) ||                     \
+	IS_ENABLED(CONFIG_DRM_OPLUS_NOTIFY)
+>>>>>>> f0f596d32f85 (treewide: Use CONFIG_QCOM_KGSL for guard instead of CONFIG_DRM_MSM)
 	struct notifier_block chg_fb_notify;
 #elif IS_ENABLED(CONFIG_OPLUS_MTK_DRM_GKI_NOTIFY_CHG)
 	struct notifier_block chg_fb_notify;
