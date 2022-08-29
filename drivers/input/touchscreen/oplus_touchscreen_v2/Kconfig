@@ -56,6 +56,12 @@ config TOUCHPANEL_SYNAPTICS
     Say Y to enable driver for Touchpanel using Synaptics_IC
     Say M to enable driver for Touchpanel using Synaptics_IC as module.
 
+config TOUCHPANEL_FOCAL
+    tristate "TP Focal_IC enable or not for OPLUS"
+    ---help---
+    say Y to enable driver for Touchpanel using FOCALTECK_IC
+    Say M to enable driver for Touchpanel using FOCALTECK_IC as module.
+
 config TOUCHPANEL_SAMSUNG
     tristate "TP samsung IC enable or not for OPLUS"
     ---help---
@@ -70,6 +76,11 @@ config TOUCHPANEL_ST
 if TOUCHPANEL_SYNAPTICS
 source "drivers/input/touchscreen/oplus_touchscreen_v2/Synaptics/Kconfig"
 endif
+
+if TOUCHPANEL_FOCAL
+source "drivers/input/touchscreen/oplus_touchscreen_v2/Focal/Kconfig"
+endif
+
 if TOUCHPANEL_SAMSUNG
 source "drivers/input/touchscreen/oplus_touchscreen_v2/Samsung/Kconfig"
 endif
