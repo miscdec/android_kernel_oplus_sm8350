@@ -19,4 +19,5 @@ obj-$(CONFIG_TOUCHPANEL_NOTIFY) += oplus_bsp_tp_notify.o
 
 obj-$(CONFIG_TOUCHPANEL_SYNAPTICS) += Synaptics/
 obj-$(CONFIG_TOUCHPANEL_FOCAL) += Focal/
+obj-$(CONFIG_TOUCHPANEL_ILITEK) += ilitek/
 obj-$(CONFIG_TOUCHPANEL_SAMSUNG) += Samsung/

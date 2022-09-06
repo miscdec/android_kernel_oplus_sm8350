@@ -62,6 +62,12 @@ config TOUCHPANEL_FOCAL
     say Y to enable driver for Touchpanel using FOCALTECK_IC
     Say M to enable driver for Touchpanel using FOCALTECK_IC as module.
 
+config TOUCHPANEL_ILITEK
+    tristate "TP ilitek IC enable or not for OPLUS"
+    ---help---
+    say Y to enable driver for Touchpanel using ilitek IC
+    Say M to enable driver for Touchpanel using ilitek IC as module.
+
 config TOUCHPANEL_SAMSUNG
     tristate "TP samsung IC enable or not for OPLUS"
     ---help---
