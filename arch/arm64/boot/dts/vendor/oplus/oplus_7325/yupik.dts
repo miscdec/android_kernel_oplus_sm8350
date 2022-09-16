@@ -1,7 +1,7 @@
 /dts-v1/;
 
-#include "../qcom/yupik.dtsi"
-#include "../qcom/yupik-idp.dtsi"
+#include "../../qcom/yupik.dtsi"
+#include "../../qcom/yupik-idp.dtsi"
 
 / {
 	model = "Qualcomm Technologies, Inc. Yupik IDP";

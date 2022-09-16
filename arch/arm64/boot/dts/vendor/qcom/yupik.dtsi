@@ -416,7 +416,10 @@
 
 	pil_trustedvm_mem: pil_trustedvm_region@d0800000 {
 		no-map;
-		reg = <0x0 0xd0800000 0x0 0x76f7000>;
+                //#ifdef OPLUS_FEATURE_BOOT_SECURITY
+                /* 2021/06/21, delete for not use TVM TUI */
+		//reg = <0x0 0xd0800000 0x0 0x76f7000>;
+                //#endif /* OPLUS_FEATURE_BOOT_SECURITY */
 	};
 
 	qrtr_shbuf: qrtr-shmem {
@@ -2336,21 +2339,7 @@
 				<DCC_READ 0x8ab04ac 1 0>,
 				<DCC_READ 0x8ab04b0 1 0>,
 				<DCC_READ 0x8ab04b4 1 0>,
-				<DCC_READ 0x8ab04b8 1 0>,
-				<DCC_READ 0xaa10504 1 0>,
-				<DCC_READ 0xaa10508 1 0>,
-				<DCC_READ 0xaa10510 1 0>,
-				<DCC_READ 0xaa10520 1 0>,
-				<DCC_READ 0xaa10524 1 0>,
-				<DCC_READ 0xaa10528 1 0>,
-				<DCC_READ 0xaa1052c 1 0>,
-				<DCC_READ 0xaa10530 1 0>,
-				<DCC_READ 0xaa10534 1 0>,
-				<DCC_READ 0xaa10538 1 0>,
-				<DCC_READ 0xaa1053c 1 0>,
-				<DCC_READ 0xaa10300 1 0>,
-				<DCC_READ 0xaa10010 1 0>,
-				<DCC_READ 0xaa10020 1 0>;
+				<DCC_READ 0x8ab04b8 1 0>;
 		};
 	};
 
@@ -4248,7 +4237,6 @@
 		qcom,smem-id = <626>;
 		qcom,signal-aop;
 		qcom,complete-ramdump;
-		qcom,ignore-ssr-failure;
 
 		/* Inputs from wpss */
 		interrupts-extended = <&intc GIC_SPI 587 IRQ_TYPE_LEVEL_HIGH>,

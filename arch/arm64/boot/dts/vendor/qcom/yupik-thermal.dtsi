@@ -741,7 +741,7 @@
 		};
 
 		cooling-maps {
-			cdsp_cdev {
+			cdsp-cdev {
 				trip = <&nspss0_trip>;
 				cooling-device = <&cdsp_sw 4 4>;
 			};
@@ -753,7 +753,7 @@
 							THERMAL_MAX_LIMIT>;
 			};
 
-			modem_pa_cdev {
+			modem-pa-cdev {
 				trip = <&nspss0_trip>;
 				cooling-device = <&modem_pa 3 3>;
 			};
@@ -774,7 +774,7 @@
 		};
 
 		cooling-maps {
-			cdsp_cdev {
+			cdsp-cdev {
 				trip = <&nspss1_trip>;
 				cooling-device = <&cdsp_sw 4 4>;
 			};
@@ -786,41 +786,8 @@
 							THERMAL_MAX_LIMIT>;
 			};
 
-			modem_pa_cdev {
+			modem-pa-cdev {
 				trip = <&nspss1_trip>;
-				cooling-device = <&modem_pa 3 3>;
-			};
-		};
-	};
-
-	video-step {
-		polling-delay-passive = <0>;
-		polling-delay = <0>;
-		thermal-governor = "step_wise";
-		thermal-sensors = <&tsens1 5>;
-		trips {
-			video_trip: video-trip {
-				temperature = <100000>;
-				hysteresis = <5000>;
-				type = "passive";
-			};
-		};
-
-		cooling-maps {
-			cdsp_cdev {
-				trip = <&video_trip>;
-				cooling-device = <&cdsp_sw 4 4>;
-			};
-
-			gpu_cdev {
-				trip = <&video_trip>;
-				/* throttle to 315000000Hz */
-				cooling-device = <&msm_gpu THERMAL_MAX_LIMIT
-							THERMAL_MAX_LIMIT>;
-			};
-
-			modem_pa_cdev {
-				trip = <&video_trip>;
 				cooling-device = <&modem_pa 3 3>;
 			};
 		};
@@ -994,39 +961,6 @@
 			mdmss3_cdev2 {
 				trip = <&mdmss3_trip2>;
 				cooling-device = <&modem_tj 3 3>;
-			};
-		};
-	};
-
-	camera-0-step {
-		polling-delay-passive = <0>;
-		polling-delay = <0>;
-		thermal-governor = "step_wise";
-		thermal-sensors = <&tsens1 11>;
-		trips {
-			camera_trip: camera-trip {
-				temperature = <100000>;
-				hysteresis = <5000>;
-				type = "passive";
-			};
-		};
-
-		cooling-maps {
-			cdsp_cdev {
-				trip = <&camera_trip>;
-				cooling-device = <&cdsp_sw 4 4>;
-			};
-
-			gpu_cdev {
-				trip = <&camera_trip>;
-				/* throttle to 315000000Hz */
-				cooling-device = <&msm_gpu THERMAL_MAX_LIMIT
-							THERMAL_MAX_LIMIT>;
-			};
-
-			modem_pa_cdev {
-				trip = <&camera_trip>;
-				cooling-device = <&modem_pa 3 3>;
 			};
 		};
 	};

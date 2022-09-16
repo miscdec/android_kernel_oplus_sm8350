@@ -2,7 +2,7 @@
 the up part file change like:
 delete note  and status = "disabled" to "ok"  add here also, other will meet can't boot issue or compile error issue
 **************************/
-#include "../qcom/yupik-idp.dtsi"
+#include "../../qcom/yupik-idp.dtsi"
 &soc {
 	gpio_keys {
 		compatible = "gpio-keys";
