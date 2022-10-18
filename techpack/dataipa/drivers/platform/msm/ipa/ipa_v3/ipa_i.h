@@ -506,13 +506,11 @@ enum ipa3_wdi_polling_mode {
  * @page: skb page
  * @dma_addr: DMA address of this Rx packet
  * @is_tmp_alloc: skb page from tmp_alloc or recycle_list
- * @page_order: page order associated with the page.
  */
 struct ipa_rx_page_data {
 	struct page *page;
 	dma_addr_t dma_addr;
 	bool is_tmp_alloc;
-	u32 page_order;
 };
 
 struct ipa3_active_client_htable_entry {
@@ -546,7 +544,6 @@ struct ipa_smmu_cb_ctx {
 	u32 va_end;
 	bool shared;
 	bool is_cache_coherent;
-	bool done;
 };
 
 /**
@@ -1448,7 +1445,6 @@ struct ipa3_stats {
 	u32 tx_non_linear;
 	u32 rx_page_drop_cnt;
 	struct ipa3_page_recycle_stats page_recycle_stats[2];
-	u64 lower_order;
 };
 
 /* offset for each stats */
@@ -2128,8 +2124,6 @@ struct ipa3_context {
 	bool (*get_teth_port_state[IPA_MAX_CLNT])(void);
 
 	atomic_t is_ssr;
-	bool deepsleep;
-	void *subsystem_get_retval;
 	struct IpaHwOffloadStatsAllocCmdData_t
 		gsi_info[IPA_HW_PROTOCOL_MAX];
 	bool ipa_wan_skb_page;
@@ -2161,8 +2155,6 @@ struct ipa3_context {
 	bool modem_load_ipa_fw;
 	bool fnr_stats_not_supported;
 	bool is_device_crashed;
-	int ipa_pil_load;
-
 };
 
 struct ipa3_plat_drv_res {
@@ -2510,6 +2502,7 @@ int ipa3_set_reset_client_prod_pipe_delay(bool set_reset,
 int ipa3_start_stop_client_prod_gsi_chnl(enum ipa_client_type client,
 		bool start_chnl);
 void ipa3_client_prod_post_shutdown_cleanup(void);
+
 
 int ipa3_set_reset_client_cons_pipe_sus_holb(bool set_reset, u32 tmr_val,
 		enum ipa_client_type client);
@@ -2874,7 +2867,7 @@ int ipa3_inc_client_enable_clks_no_block(struct ipa_active_client_logging_info
 void ipa3_dec_client_disable_clks_no_block(
 	struct ipa_active_client_logging_info *id);
 void ipa3_dec_client_disable_clks_delay_wq(
-		struct ipa_active_client_logging_info *id, unsigned long delay);
+	struct ipa_active_client_logging_info *id, unsigned long delay);
 void ipa3_active_clients_log_dec(struct ipa_active_client_logging_info *id,
 		bool int_ctx);
 void ipa3_active_clients_log_inc(struct ipa_active_client_logging_info *id,
@@ -2978,7 +2971,6 @@ int ipa3_uc_send_cmd(u32 cmd, u32 opcode, u32 expected_status,
 void ipa3_uc_register_handlers(enum ipa3_hw_features feature,
 			      struct ipa3_uc_hdlrs *hdlrs);
 int ipa3_uc_notify_clk_state(bool enabled);
-void ipa3_uc_interface_destroy(void);
 int ipa3_dma_setup(void);
 void ipa3_dma_shutdown(void);
 void ipa3_dma_async_memcpy_notify_cb(void *priv,
@@ -3129,7 +3121,6 @@ int ipa3_get_ntn_stats(struct Ipa3HwStatsNTNInfoData_t *stats);
 struct dentry *ipa_debugfs_get_root(void);
 void ipa3_enable_dcd(void);
 void ipa3_disable_prefetch(enum ipa_client_type client);
-void ipa3_dealloc_common_event_ring(void);
 int ipa3_alloc_common_event_ring(void);
 int ipa3_allocate_dma_task_for_gsi(void);
 void ipa3_free_dma_task_for_gsi(void);
