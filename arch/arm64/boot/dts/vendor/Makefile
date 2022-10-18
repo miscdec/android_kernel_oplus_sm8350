@@ -1,0 +1,12 @@
+vendor := $(srctree)/$(src)
+	subdir-y += qcom
+	subdir-y += oplus/lemonadev
+	subdir-y += oplus/martini
+	subdir-y += oplus/peacock
+	subdir-y += oplus/fussi
+	subdir-y += oplus/cupid
+	subdir-y += oplus/luwu
+	subdir-y += oplus/eva
+	subdir-y += oplus/fluorite
+	subdir-y += oplus/walle
+	subdir-y += oplus/libai
