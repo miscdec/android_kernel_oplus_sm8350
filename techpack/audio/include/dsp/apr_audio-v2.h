@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 
@@ -222,8 +221,6 @@ struct adm_cmd_matrix_map_routings_v5 {
 
 /* Definition for a low latency stream session. */
 #define ADM_LOW_LATENCY_DEVICE_SESSION			0x2000
-
-#define ADM_LOW_LATENCY_NPROC_DEVICE_SESSION		0x6000
 
 /* Definition for a ultra low latency stream session. */
 #define ADM_ULTRA_LOW_LATENCY_DEVICE_SESSION		0x4000
@@ -846,10 +843,6 @@ struct audproc_softvolume_params {
  */
 #define AUDPROC_PARAM_ID_MFC_OUTPUT_MEDIA_FORMAT            0x00010913
 
-/* ID of the Output Media Format V2 parameters used by AUDPROC_MODULE_ID_MFC.
- */
-#define AUDPROC_PARAM_ID_MFC_OUTPUT_MEDIA_FORMAT_V2         0x00010942
-
 /* Param ID of Channel Mixer used by AUDPROC_MODULE_ID_MFC */
 #define AUDPROC_CHMIXER_PARAM_ID_COEFF                      0x00010342
 
@@ -885,33 +878,6 @@ struct adm_cmd_set_pp_params_v5 {
 	 */
 } __packed;
 
-/* Payload of the AUDPROC_PARAM_ID_MFC_OUTPUT_MEDIA_FORMAT_V2 parameter in the
- Media Format Converter Module. Following this will be the variable payload for channel_map.
- */
-struct audproc_mfc_output_media_fmt_v2_t
-{
-	uint32_t sampling_rate;
-	/**< @h2xmle_description  {Sampling rate in samples per second.}
-	@h2xmle_range        {0..384000}  */
-
-	uint16_t bits_per_sample;
-	/**< @h2xmle_description  {Number of bits used to store each sample.}
-	@h2xmle_rangeList   {"16 bits per sample (Q15 format)"= 16;"24 bits per sample (Q27 format)"=24;"32 bits per sample (Q31 format)"=32
-	@h2xmle_default      {16}
-	*/
-
-	uint16_t num_channels;
-	/**< @h2xmle_description  {Number of channels.}
-	@h2xmle_default      {1}
-	@h2xmle_range        {1..32}  */
-
-	uint16_t channel_type[0];
-	/**< @h2xmle_description  {Channel mapping array. Specify a channel mapping for each output channel.If the number of channels is not a multiple of four, zero padding must be added to the channel type array to align the packet to a multiple of 32 bits.}
-	@h2xmle_variableArraySize {num_channels}
-	@h2xmle_range        {1..63}
-	@h2xmle_default      {1}*/
-} __packed;
-
 /* Maximum number of channels supported by MFC media fmt params */
 #define AUDPROC_MFC_OUT_CHANNELS_MAX 8
 
@@ -928,6 +894,31 @@ struct audproc_volume_ctrl_master_gain {
 	/* Clients must set this field to zero. */
 	uint16_t                  reserved;
 } __packed;
+
+#ifdef OPLUS_FEATURE_KTV
+struct audproc_revert_param {
+	int32_t mode;
+	int32_t volume;
+	int32_t peg;
+	int32_t pitchange;
+	int32_t reverbparam;
+	int32_t enabled;
+	int32_t reverved0;
+	int32_t reverved1;
+	int32_t reverved2;
+	int32_t reverved3;
+	int32_t reverved4;
+	int32_t reverved5;
+	int32_t reverved6;
+	int32_t reverved7;
+	int32_t reverved8;
+	int32_t reverved9;
+	int32_t reverved10;
+	int32_t reverved11;
+	int32_t reverved12;
+	int32_t reverved13;
+} __packed;
+#endif /* OPLUS_FEATURE_KTV */
 
 struct audproc_soft_step_volume_params {
 /*
@@ -5747,7 +5738,6 @@ struct afe_param_id_lpass_core_shared_clk_cfg {
 
 #define NULL_POPP_TOPOLOGY				0x00010C68
 #define NULL_COPP_TOPOLOGY				0x00010312
-#define AUDIO_COPP_MFC					0x10000098
 #define DEFAULT_COPP_TOPOLOGY				0x00010314
 #define DEFAULT_POPP_TOPOLOGY				0x00010BE4
 #define COMPRESSED_PASSTHROUGH_DEFAULT_TOPOLOGY         0x0001076B
@@ -8134,8 +8124,6 @@ struct asm_session_cmdrsp_get_path_delay_v2 {
 
 #define ASM_ULTRA_LOW_LATENCY_STREAM_SESSION			0x20000000
 
-#define ASM_ULTRA_LOW_LATENCY_NPROC_STREAM_SESSION		0x30000000
-
 #define ASM_ULL_POST_PROCESSING_STREAM_SESSION			0x40000000
 
 #define ASM_LEGACY_STREAM_SESSION                                      0
@@ -8312,9 +8300,6 @@ struct asm_stream_cmd_open_shared_io {
 
 /* Bit value for Low Latency Tx stream subfield */
 #define ASM_LOW_LATENCY_TX_STREAM_SESSION			1
-
-/* Bit value for Low Latency No Post Processing Tx stream subfield */
-#define ASM_LOW_LATENCY_NPROC_TX_STREAM_SESSION			3
 
 /* Bit shift for the stream_perf_mode subfield. */
 #define ASM_SHIFT_STREAM_PERF_MODE_FLAG_IN_OPEN_READ              29
@@ -11422,6 +11407,14 @@ struct afe_spkr_prot_calib_get_resp {
 	struct asm_calib_res_cfg res_cfg;
 } __packed;
 
+#ifdef OPLUS_FEATURE_EAR_PROTECTION
+#define TOPOLOGY_ID_EAR_PROTECTION                              0x10012D20
+#define MODULE_ID_EAR_PROTECTION                                0x10012D21
+
+#define AFE_PARAM_ID_EAR_PROTECTION_ENABLE                      0x10012D23
+#define AFE_PARAM_ID_EAR_PROTECTION_GET_PARAM               0x10012D25
+#define AFE_PARAM_ID_EAR_PROTECTION_SET_PARAM               0x10012D27
+#endif /* OPLUS_FEATURE_EAR_PROTECTION */
 
 #define AFE_MODULE_SPEAKER_PROTECTION_V4_RX       0x000102C7
 #define AFE_PARAM_ID_SP_V4_OP_MODE                0x000102C9
@@ -12249,9 +12242,6 @@ struct afe_param_id_clip_bank_sel {
 /* Supported LPASS CLK root*/
 #define Q6AFE_LPASS_CLK_ROOT_DEFAULT 0
 
-#define Q6AFE_LPASS_MCLK_IN0 1
-#define Q6AFE_LPASS_MCLK_IN1 2
-
 enum afe_lpass_clk_mode {
 	Q6AFE_LPASS_MODE_BOTH_INVALID,
 	Q6AFE_LPASS_MODE_CLK1_VALID,
@@ -12405,8 +12395,6 @@ enum afe_lpass_clk_mode {
 /* Clock ID for AHB HDMI input */
 #define Q6AFE_LPASS_CLK_ID_AHB_HDMI_INPUT                         0x400
 
-#define Q6AFE_LPASS_CLK_ID_SPDIF_CORE                             0x000
-
 /* Clock ID for the primary SPDIF output core. */
 #define AFE_CLOCK_SET_CLOCK_ID_PRI_SPDIF_OUTPUT_CORE              0x500
 /* Clock ID for the secondary SPDIF output core. */
@@ -12492,12 +12480,6 @@ struct afe_clk_set {
 #define AVS_BUILD_BRANCH_VERSION_V3		3
 
 #define AFE_PARAM_ID_CLOCK_SET_V2		0x000102E6
-
-#define AFE_CLOCK_SET_CLOCK_ROOT_DEFAULT	0x2
-#define AFE_CLOCK_DEFAULT_INTEGER_DIVIDER	0x0
-#define AFE_CLOCK_DEFAULT_M_VALUE		0x1
-#define AFE_CLOCK_DEFAULT_N_VALUE		0x2
-#define AFE_CLOCK_DEFAULT_D_VALUE		0x1
 
 #define AFE_API_VERSION_CLOCK_SET_V2		0x1
 
@@ -13674,16 +13656,4 @@ struct afe_param_id_port_data_log_disable_t
 	 */
 } __packed;
 
-#define AFE_MODULE_LIMITER  0x000102A8
-#define AFE_PARAM_ID_ENABLE 0x00010203
-struct afe_param_id_port_afe_limiter_disable_t
-{
-	uint16_t           disable_afe_limiter;
-	/** Flag for enabling or disabling data logging.
-	 * @values
-	 * - AFE_PORT_DATA_LOGGING_ENABLE  - enable data logging.
-	 * - AFE_PORT_DATA_LOGGING_DISABLE - disable data logging.
-	 */
-	 uint16_t	reserved;
-} __packed;
 #endif /*_APR_AUDIO_V2_H_ */

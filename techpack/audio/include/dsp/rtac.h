@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2011, 2013-2015, 2017-2019, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __RTAC_H__
@@ -14,10 +13,17 @@
 #define RTAC_CVS		1
 #define RTAC_VOICE_MODES	2
 
-#define RTAC_MAX_ACTIVE_DEVICES		15
+#define RTAC_MAX_ACTIVE_DEVICES		6
 #define RTAC_MAX_ACTIVE_POPP		8
 
 #define DEFAULT_APP_TYPE	0x00011130
+
+#ifdef OPLUS_FEATURE_AUDIODETECT
+#define MUTE_DETECT_MODULE_ID     0x10001132
+#define MUTE_DETECT_ENABLE_PARAM_ID    0x10001098
+#define MUTE_DETECT_RESULT_PARAM_ID    0x10001099
+#define MUTE_DETECT_START_PARAM_ID    0x10001083
+#endif /* OPLUS_FEATURE_AUDIODETECT */
 
 enum {
 	ADM_RTAC_CAL,

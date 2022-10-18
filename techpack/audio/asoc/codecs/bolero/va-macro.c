@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -66,6 +65,10 @@ MODULE_PARM_DESC(va_tx_amic_unmute_delay, "delay to unmute the tx amic path");
 static int va_tx_dmic_unmute_delay = BOLERO_CDC_VA_TX_DMIC_UNMUTE_DELAY_MS;
 module_param(va_tx_dmic_unmute_delay, int, 0664);
 MODULE_PARM_DESC(va_tx_dmic_unmute_delay, "delay to unmute the tx dmic path");
+
+#ifdef OPLUS_FEATURE_MIC_VA_MIC_CLK_SWITCH
+static struct va_macro_priv *va_priv_golbal = NULL;
+#endif /* OPLUS_FEATURE_MIC_VA_MIC_CLK_SWITCH */
 
 static int va_macro_core_vote(void *handle, bool enable);
 
@@ -185,7 +188,6 @@ struct va_macro_priv {
 	int dec_mode[VA_MACRO_NUM_DECIMATORS];
 	u16 current_clk_id;
 	int pcm_rate[VA_MACRO_NUM_DECIMATORS];
-	bool dev_up;
 };
 
 static bool va_macro_get_data(struct snd_soc_component *component,
@@ -328,9 +330,9 @@ static int va_macro_event_handler(struct snd_soc_component *component,
 		va_macro_core_vote(va_priv, false);
 		break;
 	case BOLERO_MACRO_EVT_SSR_UP:
+		trace_printk("%s, enter SSR up\n", __func__);
 		/* reset swr after ssr/pdr */
 		va_priv->reset_swr = true;
-		va_priv->dev_up = true;
 		if (va_priv->swr_ctrl_data)
 			swrm_wcd_notify(
 				va_priv->swr_ctrl_data[0].va_swr_pdev,
@@ -340,7 +342,6 @@ static int va_macro_event_handler(struct snd_soc_component *component,
 		bolero_rsc_clk_reset(va_dev, VA_CORE_CLK);
 		break;
 	case BOLERO_MACRO_EVT_SSR_DOWN:
-		va_priv->dev_up = false;
 		if (va_priv->swr_ctrl_data) {
 			swrm_wcd_notify(
 				va_priv->swr_ctrl_data[0].va_swr_pdev,
@@ -444,7 +445,9 @@ static int va_macro_swr_pwr_event_v2(struct snd_soc_dapm_widget *w,
 		}
 		break;
 	case SND_SOC_DAPM_POST_PMD:
-		if (va_priv->current_clk_id == VA_CORE_CLK) {
+		if (va_priv->current_clk_id == VA_CORE_CLK &&
+			va_priv->va_swr_clk_cnt != 0 &&
+			va_priv->tx_clk_status) {
 			ret = bolero_clk_rsc_request_clock(va_priv->dev,
 					va_priv->default_clk_id,
 					TX_CORE_CLK,
@@ -453,8 +456,7 @@ static int va_macro_swr_pwr_event_v2(struct snd_soc_dapm_widget *w,
 				dev_dbg(component->dev,
 					"%s: request clock TX_CLK disable failed\n",
 					__func__);
-				if (va_priv->dev_up)
-					break;
+				break;
 			}
 			ret = bolero_clk_rsc_request_clock(va_priv->dev,
 					va_priv->default_clk_id,
@@ -464,11 +466,10 @@ static int va_macro_swr_pwr_event_v2(struct snd_soc_dapm_widget *w,
 				dev_dbg(component->dev,
 					"%s: request clock VA_CLK disable failed\n",
 					__func__);
-				if (va_priv->dev_up)
-					bolero_clk_rsc_request_clock(va_priv->dev,
-						TX_CORE_CLK,
-						TX_CORE_CLK,
-						false);
+				bolero_clk_rsc_request_clock(va_priv->dev,
+					TX_CORE_CLK,
+					TX_CORE_CLK,
+					false);
 				break;
 			}
 			va_priv->current_clk_id = TX_CORE_CLK;
@@ -707,10 +708,6 @@ static int va_macro_tx_va_mclk_enable(struct va_macro_priv *va_priv,
 							   TX_CORE_CLK,
 							   false);
 			if (ret < 0) {
-				if (va_priv->swr_clk_users == 0) {
-					msm_cdc_pinctrl_select_sleep_state(
-							va_priv->va_swr_gpio_p);
-				}
 				dev_err_ratelimited(va_priv->dev,
 					"%s: swr request clk failed\n",
 					__func__);
@@ -1825,6 +1822,59 @@ VA_MACRO_DAPM_ENUM_EXT(va_smic3_v3, BOLERO_CDC_VA_INP_MUX_ADC_MUX3_CFG0,
 			0, smic_mux_text_v2, snd_soc_dapm_get_enum_double,
 			va_macro_put_dec_enum);
 
+#ifdef OPLUS_FEATURE_MIC_VA_MIC_CLK_SWITCH
+static int va_macro_mic_clk_get(struct snd_kcontrol *kcontrol,
+				      struct snd_ctl_elem_value *ucontrol)
+{
+	if (!va_priv_golbal)
+		return -EINVAL;
+
+	ucontrol->value.integer.value[0] = VA_MACRO_CLK_DIV_16 - va_priv_golbal->dmic_clk_div;
+	pr_debug("%s: va mic clk = %ld\n",
+		 __func__, ucontrol->value.integer.value[0]);
+    return 0;
+}
+
+static int va_macro_mic_clk_put(struct snd_kcontrol *kcontrol,
+				      struct snd_ctl_elem_value *ucontrol)
+{
+	if (!va_priv_golbal)
+		return -EINVAL;
+
+	switch (ucontrol->value.integer.value[0]) {
+	case 0:
+		va_priv_golbal->dmic_clk_div = VA_MACRO_CLK_DIV_16;
+		break;
+	case 1:
+		va_priv_golbal->dmic_clk_div = VA_MACRO_CLK_DIV_8;
+		break;
+	case 2:
+		va_priv_golbal->dmic_clk_div = VA_MACRO_CLK_DIV_6;
+		break;
+	case 3:
+		va_priv_golbal->dmic_clk_div = VA_MACRO_CLK_DIV_4;
+		break;
+	case 4:
+		va_priv_golbal->dmic_clk_div = VA_MACRO_CLK_DIV_3;
+		break;
+	case 5:
+		va_priv_golbal->dmic_clk_div = VA_MACRO_CLK_DIV_2;
+		break;
+	default:
+		break;
+	}
+	pr_debug("%s: dmic_clk_div = %d\n",
+		 __func__, va_priv_golbal->dmic_clk_div);
+    return 0;
+}
+
+static const char *const mic_clk_rate_text[] = {"0P6MHZ", "1P2MHZ", "1P6MHZ", "2P4MHZ",
+	"3P2MHZ", "4P8MHZ"};
+
+static const struct soc_enum va_mic_clk_enum =
+	SOC_ENUM_SINGLE_EXT(6, mic_clk_rate_text);
+#endif
+
 static const struct snd_kcontrol_new va_aif1_cap_mixer[] = {
 	SOC_SINGLE_EXT("DEC0", SND_SOC_NOPM, VA_MACRO_DEC0, 1, 0,
 			va_macro_tx_mixer_get, va_macro_tx_mixer_put),
@@ -2610,6 +2660,11 @@ static const struct snd_kcontrol_new va_macro_snd_controls[] = {
 
 	SOC_ENUM_EXT("VA_DEC3 MODE", dec_mode_mux_enum,
 			va_macro_dec_mode_get, va_macro_dec_mode_put),
+
+#ifdef OPLUS_FEATURE_MIC_VA_MIC_CLK_SWITCH
+	SOC_ENUM_EXT("VA_mic_clk", va_mic_clk_enum,
+			va_macro_mic_clk_get, va_macro_mic_clk_put),
+#endif
 };
 
 static const struct snd_kcontrol_new va_macro_snd_controls_common[] = {
@@ -2621,6 +2676,11 @@ static const struct snd_kcontrol_new va_macro_snd_controls_common[] = {
 			  -84, 40, digital_gain),
 	SOC_SINGLE_EXT("LPI Enable", 0, 0, 1, 0,
 		va_macro_lpi_get, va_macro_lpi_put),
+
+#ifdef OPLUS_FEATURE_MIC_VA_MIC_CLK_SWITCH
+	SOC_ENUM_EXT("VA_mic_clk", va_mic_clk_enum,
+			va_macro_mic_clk_get, va_macro_mic_clk_put),
+#endif
 };
 
 static const struct snd_kcontrol_new va_macro_snd_controls_v3[] = {
@@ -2845,8 +2905,6 @@ static int va_macro_init(struct snd_soc_component *component)
 		snd_soc_dapm_ignore_suspend(dapm, "VA SWR_MIC7");
 	}
 	snd_soc_dapm_sync(dapm);
-
-	va_priv->dev_up = true;
 
 	for (i = 0; i < VA_MACRO_NUM_DECIMATORS; i++) {
 		va_priv->va_hpf_work[i].va_priv = va_priv;
@@ -3204,7 +3262,9 @@ static int va_macro_probe(struct platform_device *pdev)
 		mutex_init(&va_priv->swr_clk_lock);
 	}
 	va_priv->is_used_va_swr_gpio = is_used_va_swr_gpio;
-
+#ifdef OPLUS_FEATURE_MIC_VA_MIC_CLK_SWITCH
+	va_priv_golbal = va_priv;
+#endif
 	mutex_init(&va_priv->mclk_lock);
 	dev_set_drvdata(&pdev->dev, va_priv);
 	va_macro_init_ops(&ops, va_io_base, va_without_decimation);
