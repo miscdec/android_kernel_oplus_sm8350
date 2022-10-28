@@ -50,7 +50,7 @@
 #include "ufshpb_skh.h"
 
 /* Version info */
-#define UFSFEATURE_DD_VER			0x010002
+#define UFSFEATURE_DD_VER			0x010004
 #define UFSFEATURE_DD_VER_POST			""
 
 /* For read10 debug */

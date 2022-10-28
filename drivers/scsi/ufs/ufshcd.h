@@ -482,6 +482,18 @@ struct ufs_clk_gating {
 	struct workqueue_struct *clk_gating_workq;
 };
 
+#if defined(CONFIG_UFSFEATURE)
+/* for manual gc */
+struct ufs_manual_gc {
+	int state;
+	bool hagc_support;
+	struct hrtimer hrtimer;
+	unsigned long delay_ms;
+	struct work_struct hibern8_work;
+	struct workqueue_struct *mgc_workq;
+};
+#endif
+
 struct ufs_saved_pwr_info {
 	struct ufs_pa_layer_attr info;
 	bool is_valid;
@@ -1060,17 +1072,16 @@ struct ufs_hba {
 	struct unipro_signal_quality_ctrl signalCtrl;
 #endif
 	bool wb_buf_flush_enabled;
+#if defined(CONFIG_UFSFEATURE)
+	struct ufs_manual_gc manual_gc;
+#endif
 	bool wb_enabled;
 	struct delayed_work rpm_dev_flush_recheck_work;
 	ANDROID_KABI_RESERVE(1);
 	ANDROID_KABI_RESERVE(2);
 	ANDROID_KABI_RESERVE(3);
 	ANDROID_KABI_RESERVE(4);
-#ifdef CONFIG_SCSI_UFSHCD_QTI
-	/* distinguish between resume and restore */
-	bool restore;
-	bool abort_triggered_wlun;
-#endif
+
 #ifdef CONFIG_OPLUS_FEATURE_UFSPLUS
 #if defined(CONFIG_UFSFEATURE)
 	struct ufsf_feature ufsf;
@@ -1258,6 +1269,16 @@ extern int ufshcd_dme_get_attr(struct ufs_hba *hba, u32 attr_sel,
 			       u32 *mib_val, u8 peer);
 extern int ufshcd_config_pwr_mode(struct ufs_hba *hba,
 			struct ufs_pa_layer_attr *desired_pwr_mode);
+
+#if defined(CONFIG_UFSFEATURE)
+extern int ufshcd_query_attr_retry(struct ufs_hba *hba,
+		enum query_opcode opcode, enum attr_idn idn, u8 index, u8 selector,
+		u32 *attr_val);
+/*extern int ufshcd_query_flag_retry(struct ufs_hba *hba,
+		enum query_opcode opcode, enum flag_idn idn, bool *flag_res);*/
+extern int ufshcd_bkops_ctrl(struct ufs_hba *hba, enum bkops_status status);
+#endif
+
 /* UIC command interfaces for DME primitives */
 #define DME_LOCAL	0
 #define DME_PEER	1
@@ -1552,7 +1573,7 @@ static inline u8 ufshcd_scsi_to_upiu_lun(unsigned int scsi_lun)
 		return scsi_lun & UFS_UPIU_MAX_UNIT_NUM_ID;
 }
 #ifdef CONFIG_OPLUS_FEATURE_UFSPLUS
-#if defined(CONFIG_SCSI_SKHPB)
+#if defined(CONFIG_SCSI_SKHPB) || defined(CONFIG_UFSFEATURE)
 int ufshcd_query_flag_retry(struct ufs_hba *hba,
 	enum query_opcode opcode, enum flag_idn idn, u8 index, bool *flag_res);
 #endif

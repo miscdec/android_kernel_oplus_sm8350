@@ -90,10 +90,8 @@ static inline void skhpb_purge_active_page(struct skhpb_lu *hpb,
 
 static void skhpb_hit_lru_info(struct skhpb_victim_select_info *lru_info,
 		struct skhpb_region *cb);
-
 static int create_skh_hpbfn_enable_proc(void);
 static void remove_skh_hpbfn_enable_proc(void);
-
 #ifdef CONFIG_OPLUS_FEATURE_UFSPLUS
 #if defined(CONFIG_UFSFEATURE) && defined(CONFIG_UFSHPB)
 extern int ufsplus_hpb_status;
@@ -2704,7 +2702,6 @@ void skhpb_release(struct ufs_hba *hba, int state)
 
 	if (skhpb_alloc_mctx != 0)
 		SKHPB_DRIVER_E("warning: skhpb_alloc_mctx %d", skhpb_alloc_mctx);
-
 	remove_skh_hpbfn_enable_proc();
 
 	hba->skhpb_state = state;
@@ -3373,3 +3370,4 @@ static void remove_skh_hpbfn_enable_proc(void)
 
 	return;
 }
+

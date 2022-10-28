@@ -41,7 +41,6 @@
 bool hid_trigger_enable = 1;
 static int create_hidfn_enable_proc(void);
 static void remove_hidfn_enable_proc(void);
-
 static int ufshid_create_sysfs(struct ufshid_dev *hid);
 
 inline int ufshid_get_state(struct ufsf_feature *ufsf)
@@ -85,7 +84,8 @@ static int ufshid_read_attr(struct ufshid_dev *hid, u8 idn, u32 *attr_val)
 	     idn == QUERY_ATTR_IDN_HID_OPERATION ? "HID_OP" :
 	     idn == QUERY_ATTR_IDN_HID_FRAG_LEVEL ? "HID_LEV" : "UNKNOWN", idn);
 err_out:
-	pm_runtime_put_sync(hba->dev);
+	pm_runtime_mark_last_busy(hba->dev);
+	pm_runtime_put_noidle(hba->dev);
 	return ret;
 }
 
@@ -108,7 +108,8 @@ static int ufshid_write_attr(struct ufshid_dev *hid, u8 idn, u32 val)
 	     idn == QUERY_ATTR_IDN_HID_OPERATION ? "HID_OP" :
 	     idn == QUERY_ATTR_IDN_HID_FRAG_LEVEL ? "HID_LEV" : "UNKNOWN", idn);
 err_out:
-	pm_runtime_put_sync(hba->dev);
+	pm_runtime_mark_last_busy(hba->dev);
+	pm_runtime_put_noidle(hba->dev);
 	return ret;
 }
 
@@ -246,7 +247,8 @@ static void ufshid_auto_hibern8_enable(struct ufshid_dev *hid,
 	ufshcd_scsi_unblock_requests(hba);
 	up_write(&hba->clk_scaling_lock);
 	ufshcd_release(hba);
-	pm_runtime_put_sync(hba->dev);
+	pm_runtime_mark_last_busy(hba->dev);
+	pm_runtime_put_noidle(hba->dev);
 }
 
 static void ufshid_block_enter_suspend(struct ufshid_dev *hid)
@@ -272,13 +274,62 @@ static void ufshid_block_enter_suspend(struct ufshid_dev *hid)
 }
 
 /*
+ * If the return value is not err, pm_runtime_put_noidle() must be called once.
+ * IMPORTANT : ufshid_hold_runtime_pm() & ufshid_release_runtime_pm() pair.
+ */
+static int ufshid_hold_runtime_pm(struct ufshid_dev *hid)
+{
+	struct ufs_hba *hba = hid->ufsf->hba;
+
+	if (ufshid_get_state(hid->ufsf) == HID_SUSPEND) {
+		/* Check that device was suspended by System PM */
+		pm_runtime_get_sync(hba->dev);
+
+		/* If it success, device was suspended by Runtime PM */
+		if (ufshid_get_state(hid->ufsf) == HID_PRESENT &&
+		    hba->curr_dev_pwr_mode == UFS_ACTIVE_PWR_MODE &&
+		    hba->uic_link_state == UIC_LINK_ACTIVE_STATE)
+			goto resume_success;
+
+		INFO_MSG("RPM resume failed. Maybe it was SPM suspend");
+		INFO_MSG("UFS state (POWER = %d LINK = %d)",
+			 hba->curr_dev_pwr_mode, hba->uic_link_state);
+
+		pm_runtime_mark_last_busy(hba->dev);
+		pm_runtime_put_noidle(hba->dev);
+		return -ENODEV;
+	}
+
+	if (ufshid_is_not_present(hid))
+		return -ENODEV;
+
+	pm_runtime_get_sync(hba->dev);
+resume_success:
+	return 0;
+}
+
+static inline void ufshid_release_runtime_pm(struct ufshid_dev *hid)
+{
+	struct ufs_hba *hba = hid->ufsf->hba;
+
+	pm_runtime_mark_last_busy(hba->dev);
+	pm_runtime_put_noidle(hba->dev);
+}
+
+
+/*
  * Lock status: hid_sysfs lock was held when called.
  */
-static void ufshid_trigger_on(struct ufshid_dev *hid)
+static int ufshid_trigger_on(struct ufshid_dev *hid)
 {
-	if (unlikely(hid->hid_trigger))
-		return;
+	int ret;
 
+	if (hid->hid_trigger)
+		return 0;
+
+	ret = ufshid_hold_runtime_pm(hid);
+	if (ret)
+		return ret;
 	hid->hid_trigger = true;
 	HID_DEBUG(hid, "trigger 0 -> 1");
 
@@ -287,6 +338,10 @@ static void ufshid_trigger_on(struct ufshid_dev *hid)
 	ufshid_auto_hibern8_enable(hid, 0);
 
 	schedule_delayed_work(&hid->hid_trigger_work, 0);
+
+	ufshid_release_runtime_pm(hid);
+
+	return 0;
 }
 
 static void ufshid_allow_enter_suspend(struct ufshid_dev *hid)
@@ -315,10 +370,16 @@ static void ufshid_allow_enter_suspend(struct ufshid_dev *hid)
 /*
  * Lock status: hid_sysfs lock was held when called.
  */
-static void ufshid_trigger_off(struct ufshid_dev *hid)
+static int ufshid_trigger_off(struct ufshid_dev *hid)
 {
-	if (unlikely(!hid->hid_trigger))
-		return;
+	int ret;
+
+	if (!hid->hid_trigger)
+		return 0;
+
+	ret = ufshid_hold_runtime_pm(hid);
+	if (ret)
+		return ret;
 
 	hid->hid_trigger = false;
 	HID_DEBUG(hid, "hid_trigger 1 -> 0");
@@ -328,6 +389,10 @@ static void ufshid_trigger_off(struct ufshid_dev *hid)
 	ufshid_auto_hibern8_enable(hid, 1);
 
 	ufshid_allow_enter_suspend(hid);
+
+	ufshid_release_runtime_pm(hid);
+
+	return 0;
 }
 
 static void ufshid_trigger_work_fn(struct work_struct *dwork)
@@ -347,14 +412,15 @@ static void ufshid_trigger_work_fn(struct work_struct *dwork)
 	mutex_lock(&hid->sysfs_lock);
 	if (!hid->hid_trigger) {
 		HID_DEBUG(hid, "hid_trigger == false, return");
-		mutex_unlock(&hid->sysfs_lock);
-		return;
+		goto finish_work;;
 	}
 
 	if (ret == HID_NOT_REQUIRED) {
-		ufshid_trigger_off(hid);
-		mutex_unlock(&hid->sysfs_lock);
-		return;
+		ret = ufshid_trigger_off(hid);
+		if (likely(!ret))
+			goto finish_work;
+
+		WARN_MSG("trigger off fail.. must check it");
 	} else if (ret == HID_REQUIRED) {
 		HID_DEBUG(hid, "HID_REQUIRED, so sched (%d ms)",
 			  hid->hid_trigger_delay);
@@ -368,6 +434,9 @@ static void ufshid_trigger_work_fn(struct work_struct *dwork)
 			      msecs_to_jiffies(hid->hid_trigger_delay));
 
 	HID_DEBUG(hid, "end hid_trigger_work_fn");
+	return;
+finish_work:
+	mutex_unlock(&hid->sysfs_lock);
 }
 
 void ufshid_init(struct ufsf_feature *ufsf)
@@ -386,12 +455,12 @@ void ufshid_init(struct ufsf_feature *ufsf)
 
 	hid->hid_debug = false;
 #if defined(CONFIG_UFSHID_POC)
-	hid->hid_debug = true;
+	hid->hid_debug = false;
 	hid->block_suspend = false;
 #endif
 
 	/* If HCI supports auto hibern8, UFS Driver use it default */
-	if (ufshcd_is_auto_hibern8_supported(ufsf->hba)){
+	if (ufshcd_is_auto_hibern8_supported(ufsf->hba)) {
 		hid->is_auto_enabled = true;
 		create_hidfn_enable_proc();
 	}
@@ -452,27 +521,59 @@ static inline void ufshid_remove_sysfs(struct ufshid_dev *hid)
 void ufshid_remove(struct ufsf_feature *ufsf)
 {
 	struct ufshid_dev *hid = ufsf->hid_dev;
+	int ret;
 
 	if (!hid)
 		return;
 
 	INFO_MSG("start HID release");
 
+	mutex_lock(&hid->sysfs_lock);
+
+	ret = ufshid_trigger_off(hid);
+	if (unlikely(ret))
+		ERR_MSG("trigger off fail ret (%d)", ret);
+
+	ufshid_remove_sysfs(hid);
+
+	remove_hidfn_enable_proc();
+
 	ufshid_set_state(ufsf, HID_FAILED);
+	mutex_unlock(&hid->sysfs_lock);
 
 	cancel_delayed_work_sync(&hid->hid_trigger_work);
-
-	mutex_lock(&hid->sysfs_lock);
-	ufshid_allow_enter_suspend(hid);
-	ufshid_trigger_off(hid);
-	ufshid_remove_sysfs(hid);
-	remove_hidfn_enable_proc();
-	mutex_unlock(&hid->sysfs_lock);
 
 	kfree(hid);
 
 	INFO_MSG("end HID release");
 }
+
+void ufshid_suspend(struct ufsf_feature *ufsf)
+{
+	struct ufshid_dev *hid = ufsf->hid_dev;
+
+	if (!hid)
+		return;
+
+	if (unlikely(hid->hid_trigger))
+		ERR_MSG("hid_trigger was set to block the suspend. so weird");
+	ufshid_set_state(ufsf, HID_SUSPEND);
+
+	cancel_delayed_work_sync(&hid->hid_trigger_work);
+}
+
+void ufshid_resume(struct ufsf_feature *ufsf)
+{
+	struct ufshid_dev *hid = ufsf->hid_dev;
+
+	if (!hid)
+		return;
+
+	if (unlikely(hid->hid_trigger))
+		ERR_MSG("hid_trigger need to off");
+	ufshid_set_state(ufsf, HID_PRESENT);
+}
+
 
 /*
  * this function is called in irq context.
@@ -519,6 +620,7 @@ static ssize_t ufshid_sysfs_store_trigger(struct ufshid_dev *hid,
 					  const char *buf, size_t count)
 {
 	unsigned long val;
+	ssize_t ret;
 
 	if (kstrtoul(buf, 0, &val))
 		return -EINVAL;
@@ -527,7 +629,6 @@ static ssize_t ufshid_sysfs_store_trigger(struct ufshid_dev *hid,
 		INFO_MSG("HID_trigger close!");
 		return -EINVAL;
 	}
-
 	if (val != 0 && val != 1)
 		return -EINVAL;
 
@@ -537,9 +638,14 @@ static ssize_t ufshid_sysfs_store_trigger(struct ufshid_dev *hid,
 		return count;
 
 	if (val)
-		ufshid_trigger_on(hid);
+		ret = ufshid_trigger_on(hid);
 	else
-		ufshid_trigger_off(hid);
+		ret = ufshid_trigger_off(hid);
+
+	if (ret) {
+		INFO_MSG("Changing trigger val %lu is fail (%ld)", val, ret);
+		return ret;
+	}
 
 	return count;
 }
@@ -761,13 +867,16 @@ static ssize_t ufshid_attr_show(struct kobject *kobj, struct attribute *attr,
 		return -EIO;
 
 	hid = container_of(kobj, struct ufshid_dev, kobj);
-	if (ufshid_is_not_present(hid))
-		return -ENODEV;
+
+	error = ufshid_hold_runtime_pm(hid);
+	if (error)
+		return error;
 
 	mutex_lock(&hid->sysfs_lock);
 	error = entry->show(hid, page);
 	mutex_unlock(&hid->sysfs_lock);
 
+	ufshid_release_runtime_pm(hid);
 	return error;
 }
 
@@ -783,13 +892,16 @@ static ssize_t ufshid_attr_store(struct kobject *kobj, struct attribute *attr,
 		return -EIO;
 
 	hid = container_of(kobj, struct ufshid_dev, kobj);
-	if (ufshid_is_not_present(hid))
-		return -ENODEV;
+
+	error = ufshid_hold_runtime_pm(hid);
+	if (error)
+		return error;
 
 	mutex_lock(&hid->sysfs_lock);
 	error = entry->store(hid, page, length);
 	mutex_unlock(&hid->sysfs_lock);
 
+	ufshid_release_runtime_pm(hid);
 	return error;
 }
 
@@ -919,3 +1031,4 @@ static void remove_hidfn_enable_proc(void)
 
 	return;
 }
+

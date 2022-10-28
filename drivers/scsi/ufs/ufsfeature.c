@@ -139,10 +139,13 @@ int ufsf_query_flag_retry(struct ufs_hba *hba, enum query_opcode opcode,
 		else
 			break;
 	}
-	if (ret)
+	if (ret) {
 		dev_err(hba->dev,
 			"%s: query flag, opcode %d, idn %d, failed with error %d after %d retires\n",
 			__func__, opcode, idn, ret, retries);
+		dev_err(hba->dev, "%s: UFS state (POWER = %d LINK = %d)",
+			hba->curr_dev_pwr_mode, hba->uic_link_state);
+	}
 	return ret;
 }
 
@@ -162,10 +165,13 @@ int ufsf_query_attr_retry(struct ufs_hba *hba, enum query_opcode opcode,
 		else
 			break;
 	}
-	if (ret)
+	if (ret) {
 		dev_err(hba->dev,
 			"%s: query attr, opcode %d, idn %d, failed with error %d after %d retires\n",
 			__func__, opcode, idn, ret, retries);
+		dev_err(hba->dev, "%s: UFS state (POWER = %d LINK = %d)",
+			hba->curr_dev_pwr_mode, hba->uic_link_state);
+	}
 	return ret;
 }
 
@@ -207,7 +213,7 @@ static int ufsf_read_dev_desc(struct ufsf_feature *ufsf, u8 selector)
 		  desc_buf[DEVICE_DESC_PARAM_UFS_FEAT],
 		  desc_buf[DEVICE_DESC_PARAM_EX_FEAT_SUP+2],
 		  desc_buf[DEVICE_DESC_PARAM_EX_FEAT_SUP+3]);
-		   INFO_MSG("HPB Driver Feature Version : (%.6X%s)", UFSFEATURE_DD_VER,
+	INFO_MSG("HPB Driver Feature Version : (%.6X%s)", UFSFEATURE_DD_VER,
 			UFSFEATURE_DD_VER_POST);
 #if defined(CONFIG_UFSHPB)
 	ufshpb_get_dev_info(ufsf, desc_buf);
@@ -676,6 +682,10 @@ inline void ufsf_suspend(struct ufsf_feature *ufsf)
 	if (ufshpb_get_state(ufsf) == HPB_PRESENT)
 		ufshpb_suspend(ufsf);
 #endif
+#if defined(CONFIG_UFSHID)
+	if (ufshid_get_state(ufsf) == HID_PRESENT)
+		ufshid_suspend(ufsf);
+#endif
 }
 
 inline void ufsf_resume(struct ufsf_feature *ufsf)
@@ -692,6 +702,11 @@ inline void ufsf_resume(struct ufsf_feature *ufsf)
 #if defined(CONFIG_UFSTW)
 	if (ufstw_get_state(ufsf) == TW_RESET)
 		ufstw_reset(ufsf, true);
+#endif
+
+#if defined(CONFIG_UFSHID)
+	if (ufshid_get_state(ufsf) == HID_SUSPEND)
+		ufshid_resume(ufsf);
 #endif
 }
 

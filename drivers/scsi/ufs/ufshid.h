@@ -48,7 +48,7 @@
 #include "../../../block/blk.h"
 
 #define UFSHID_VER					0x0101
-#define UFSHID_DD_VER					0x010200
+#define UFSHID_DD_VER					0x010202
 #define UFSHID_DD_VER_POST				""
 
 #define UFS_FEATURE_SUPPORT_HID_BIT			0x400
@@ -79,6 +79,7 @@
 enum UFSHID_STATE {
 	HID_NEED_INIT = 0,
 	HID_PRESENT = 1,
+	HID_SUSPEND = 2,
 	HID_FAILED = -2,
 	HID_RESET = -3,
 };
@@ -139,5 +140,7 @@ void ufshid_init(struct ufsf_feature *ufsf);
 void ufshid_reset(struct ufsf_feature *ufsf);
 void ufshid_reset_host(struct ufsf_feature *ufsf);
 void ufshid_remove(struct ufsf_feature *ufsf);
+void ufshid_suspend(struct ufsf_feature *ufsf);
+void ufshid_resume(struct ufsf_feature *ufsf);
 void ufshid_on_idle(struct ufsf_feature *ufsf);
 #endif /* End of Header */

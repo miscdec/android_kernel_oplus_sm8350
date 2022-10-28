@@ -1,19 +1,22 @@
 /**********************************************************************************
-* Copyright (c), 2008-2019 , Guangdong Oplus Mobile Comm Corp., Ltd.
-* File: oplus_ufs_common.c
+* Copyright (c), 2008-2019 , Guangdong OPPO Mobile Comm Corp., Ltd.
+* VENDOR_EDIT
+* File: ufs-oppo.c
 * Description: UFS GKI
 * Version: 1.0
 * Date: 2020-08-12
+* ------------------------------ Revision History: --------------------------------
+* <version>           <date>                <author>                            <desc>
 ***********************************************************************************/
 
 #include <linux/module.h>
 #include <trace/hooks/oplus_ufs.h>
-#include <soc/oplus/device_info.h>
+#include <soc/oppo/device_info.h>
 #include <linux/proc_fs.h>
 
 int ufsplus_tw_status = 0;
 EXPORT_SYMBOL(ufsplus_tw_status);
-int ufsplus_hpb_status = 0;
+int ufsplus_hpb_status = 1;
 EXPORT_SYMBOL(ufsplus_hpb_status);
 
 void ufs_gen_proc_devinfo_handle(void *data, struct ufs_hba *hba)
@@ -92,5 +95,6 @@ oplus_ufs_common_init(void)
 
 device_initcall(oplus_ufs_common_init);
 
-MODULE_DESCRIPTION("OPLUS ufs driver common");
+MODULE_DESCRIPTION("OPPO ufs driver common");
 MODULE_LICENSE("GPL v2");
+MODULE_AUTHOR("Tianwen <tianwen@oppo.com>");

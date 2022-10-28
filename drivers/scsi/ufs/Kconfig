@@ -230,18 +230,17 @@ config OPLUS_FEATURE_PADL_STATISTICS
 	---help---
 	UFS PA DL error statistics
 
-config HPB_RELEASE_CHECK
-	bool "HPB Release Check for Mass Test"
-	depends on SCSI_UFSHCD && UFSFEATURE && UFSHPB
-	default n
-	---help---
-	The kernel panic occurs when hpb feature disabled by abnormal behavior.
-
 config HPB_ERR_INJECTION
 	bool "HPB ERROR INJECTION"
 	depends on SCSI_UFSHCD && UFSFEATURE && UFSHPB
 	---help---
 	error injection for checking HPB entry integrity
+
+config OPLUS_FEATURE_STORAGE_TOOL
+       tristate "Vendor specific UFS storage tool modify"
+       depends on SCSI_UFSHCD
+       help
+        Vendor specific UFS storage tool modify.
 
 config UFSTW
 	bool "UFS Turbo Write support"
@@ -280,12 +279,6 @@ config UFSHID_POC
 	3. set flag bDefragOperation
 	4. debug msg enable (default : disable)
 
-config OPLUS_FEATURE_STORAGE_TOOL
-	tristate "Vendor specific UFS storage tool modify"
-	depends on SCSI_UFSHCD
-	help
-	 Vendor specific UFS storage tool modify.
-
 config OPLUS_FEATURE_UFS
 	tristate "Vendor specific UFS common modify"
 	depends on SCSI_UFSHCD
@@ -293,11 +286,12 @@ config OPLUS_FEATURE_UFS
 	 Vendor specific UFS common modify.
 
 config OPLUS_FEATURE_UFSPLUS
-	bool "Vendor specific UFS plus common modify"
-	depends on SCSI_UFSHCD
-	help
-	 Vendor specific UFS plus common modify.
+       bool "Vendor specific UFS plus common modify"
+       depends on SCSI_UFSHCD
+       help
+        Vendor specific UFS plus common modify.
 
+	 
 config SCSI_SKHPB
 	bool "Activate HPB Host-aware Performance Booster"
 	depends on (SCSI_UFSHCD || SCSI_UFSHCD_QTI)

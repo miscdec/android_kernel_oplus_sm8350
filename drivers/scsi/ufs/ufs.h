@@ -40,12 +40,6 @@
 #include <linux/types.h>
 #include <uapi/scsi/scsi_bsg_ufs.h>
 
-#ifdef CONFIG_OPLUS_FEATURE_UFSPLUS
-#if defined(CONFIG_UFSFEATURE)
-#define UFSFEATURE_QUERY_OPCODE         0x5500
-#endif
-#endif /* CONFIG_OPLUS_FEATURE_UFSPLUS */
-
 #ifdef CONFIG_SCSI_UFSHCD_QTI
 #define MAX_QUERY_IDN		0x12
 #define MAX_CDB_SIZE		16
@@ -192,6 +186,11 @@ enum attr_idn {
 	QUERY_ATTR_IDN_CORR_PRG_BLK_NUM		= 0x11,
 	QUERY_ATTR_IDN_RESERVED2		= 0x12,
 	QUERY_ATTR_IDN_RESERVED3		= 0x13,
+#if defined(CONFIG_UFSFEATURE)
+	/* use one reserved bit */
+	QUERY_ATTR_IDN_MANUAL_GC_CONT		= 0x12,
+	QUERY_ATTR_IDN_MANUAL_GC_STATUS		= 0x13,
+#endif
 	QUERY_ATTR_IDN_FFU_STATUS		= 0x14,
 	QUERY_ATTR_IDN_PSA_STATE		= 0x15,
 	QUERY_ATTR_IDN_PSA_DATA_SIZE		= 0x16,
@@ -419,6 +418,16 @@ enum geometry_desc_param {
 #endif
 #endif /* CONFIG_OPLUS_FEATURE_UFSPLUS */
 };
+
+#if defined(CONFIG_UFSFEATURE)
+enum {
+	MANUAL_GC_OFF = 0,
+	MANUAL_GC_ON,
+	MANUAL_GC_DISABLE,
+	MANUAL_GC_ENABLE,
+	MANUAL_GC_MAX,
+};
+#endif
 
 /* Health descriptor parameters offsets in bytes*/
 enum health_desc_param {
