@@ -16,6 +16,10 @@
  * this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include <drm/drm_panel.h>
+#ifdef OPLUS_BUG_STABILITY
+#include <linux/msm_drm_notify.h>
+#include <linux/notifier.h>
+#endif /* OPLUS_BUG_STABILITY */
 
 #include "msm_drv.h"
 #include "msm_gem.h"
@@ -491,6 +495,10 @@ static void complete_commit(struct msm_commit *c)
 	struct msm_drm_private *priv = dev->dev_private;
 	struct msm_kms *kms = priv->kms;
 
+#ifdef OPLUS_BUG_STABILITY
+	mutex_lock(&priv->dspp_lock);
+#endif /* OPLUS_BUG_STABILITY */
+
 	drm_atomic_helper_wait_for_fences(dev, state, false);
 
 	kms->funcs->prepare_commit(kms, state);
@@ -499,6 +507,9 @@ static void complete_commit(struct msm_commit *c)
 
 	drm_atomic_helper_commit_planes(dev, state,
 				DRM_PLANE_COMMIT_ACTIVE_ONLY);
+#ifdef OPLUS_BUG_STABILITY
+	mutex_unlock(&priv->dspp_lock);
+#endif /* OPLUS_BUG_STABILITY */
 
 	msm_atomic_helper_commit_modeset_enables(dev, state);
 
@@ -687,6 +698,16 @@ int msm_atomic_commit(struct drm_device *dev,
 			drm_atomic_set_fence_for_plane(new_plane_state, fence);
 		}
 		c->plane_mask |= (1 << drm_plane_index(plane));
+	}
+
+     /* Protection for prepare_fence callback */
+	retry:
+		ret = drm_modeset_lock(&state->dev->mode_config.connection_mutex,
+		state->acquire_ctx);
+
+	if (ret == -EDEADLK) {
+		drm_modeset_backoff(state->acquire_ctx);
+		goto retry;
 	}
 
 	/*

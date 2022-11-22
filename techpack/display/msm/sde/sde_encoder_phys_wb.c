@@ -597,6 +597,7 @@ static void _sde_enc_phys_wb_detect_cwb(struct sde_encoder_phys *phys_enc,
 		encoder_mask = crtc_state->encoder_mask;
 		encoder_mask &= ~drm_encoder_mask(phys_enc->parent);
 	}
+
 	phys_enc->in_clone_mode = encoder_mask ? true : false;
 
 	SDE_DEBUG("detect CWB - status:%d\n", phys_enc->in_clone_mode);

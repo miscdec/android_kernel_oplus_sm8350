@@ -802,14 +802,14 @@ static struct cam_camnoc_specific
 			.access_type = CAM_REG_TYPE_READ_WRITE,
 			.masked_value = 0,
 			.offset = 0x2D20, /* JPEG_QOSGEN_SHAPING_LOW */
-			.value = 0xA0A0A0A,
+			.value = 0x05050505,
 		},
 		.qosgen_shaping_high = {
 			.enable = true,
 			.access_type = CAM_REG_TYPE_READ_WRITE,
 			.masked_value = 0,
 			.offset = 0x2D24, /* JPEG_QOSGEN_SHAPING_HIGH */
-			.value = 0xA0A0A0A,
+			.value = 0x05050505,
 		},
 	},
 	{
@@ -881,8 +881,4 @@ static struct cam_camnoc_info cam570_cpas200_camnoc_info = {
 	.errata_wa_list = &cam570_cpas200_errata_wa_list,
 };
 
-static struct cam_cpas_camnoc_qchannel cam570_cpas200_qchannel_info = {
-	.qchannel_ctrl   = 0x5C,
-	.qchannel_status = 0x60,
-};
 #endif /* _CPASTOP_V570_200_H_ */

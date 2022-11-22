@@ -669,7 +669,7 @@ static int q6asm_map_cal_memory(int32_t cal_type,
 		goto done;
 	}
 
-	/* Use second asm buf to map memory */
+	/* Use first asm buf to map memory */
 	if (common_client.port[IN].buf == NULL) {
 		pr_err("%s: common buf is NULL\n",
 			__func__);
@@ -759,7 +759,9 @@ static int q6asm_unmap_cal_memory(int32_t cal_type,
 			goto done;
 		}
 	}
-
+	#ifdef OPLUS_BUG_STABILITY
+	common_client.port[IN].buf->phys = cal_block->cal_data.paddr;
+	#endif /*OPLUS_BUG_STABILITY*/
 	result2 = q6asm_memory_unmap_regions(&common_client, IN);
 	if (result2 < 0) {
 		pr_err("%s: unmap failed, err %d\n",
@@ -1589,6 +1591,14 @@ int q6asm_audio_client_buf_alloc_contiguous(unsigned int dir,
 		pr_err("%s: buffer already allocated\n", __func__);
 		return 0;
 	}
+
+	#ifdef OPLUS_BUG_STABILITY
+	if (bufcnt == 0) {
+		pr_err("%s: invalid buffer count\n", __func__);
+		return -EINVAL;
+	}
+	#endif /* OPLUS_BUG_STABILITY */
+
 	mutex_lock(&ac->cmd_lock);
 	buf = kzalloc(((sizeof(struct audio_buffer))*bufcnt),
 			GFP_KERNEL);

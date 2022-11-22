@@ -131,6 +131,9 @@ static void ipa_dec_clients_disable_clks_on_wq(struct work_struct *work);
 static DECLARE_DELAYED_WORK(ipa_dec_clients_disable_clks_on_wq_work,
 	ipa_dec_clients_disable_clks_on_wq);
 
+static DECLARE_DELAYED_WORK(ipa_dec_clients_disable_clks_on_suspend_irq_wq_work,
+	ipa_dec_clients_disable_clks_on_wq);
+
 static void ipa_inc_clients_enable_clks_on_wq(struct work_struct *work);
 static DECLARE_WORK(ipa_inc_clients_enable_clks_on_wq_work,
 	ipa_inc_clients_enable_clks_on_wq);
@@ -3458,16 +3461,18 @@ static void ipa3_halt_q6_gsi_channels(bool prod)
 					gsi_ep_cfg->ipa_gsi_chan_num,
 					gsi_ep_cfg->ee, &code);
 			}
-			if (ret == GSI_STATUS_SUCCESS)
+			if (ret == GSI_STATUS_SUCCESS) {
 				IPADBG("halted gsi ch %d ee %d with code %d\n",
 				gsi_ep_cfg->ipa_gsi_chan_num,
 				gsi_ep_cfg->ee,
 				code);
-			else
+			} else {
 				IPAERR("failed to halt ch %d ee %d code %d\n",
 				gsi_ep_cfg->ipa_gsi_chan_num,
 				gsi_ep_cfg->ee,
 				code);
+				ipa_assert();
+			}
 		}
 	}
 }
@@ -5569,6 +5574,23 @@ void ipa3_dec_client_disable_clks_no_block(
 	/* seems like this is the only client holding the clocks */
 	queue_delayed_work(ipa3_ctx->power_mgmt_wq,
 		&ipa_dec_clients_disable_clks_on_wq_work, 0);
+}
+
+/**
+ * ipa3_dec_client_disable_clks_delay_wq() - Decrease active clients counter
+ * in delayed workqueue.
+ *
+ * Return codes:
+ * None
+ */
+void ipa3_dec_client_disable_clks_delay_wq(
+	struct ipa_active_client_logging_info *id, unsigned long delay)
+{
+	ipa3_active_clients_log_dec(id, true);
+
+	if (!queue_delayed_work(ipa3_ctx->power_mgmt_wq,
+		&ipa_dec_clients_disable_clks_on_suspend_irq_wq_work, delay))
+	IPAERR("Scheduling delayed work failed\n");
 }
 
 /**
