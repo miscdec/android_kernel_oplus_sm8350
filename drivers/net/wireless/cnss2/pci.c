@@ -989,7 +989,9 @@ static int cnss_set_pci_link(struct cnss_pci_data *pci_priv, bool link_up)
 {
 	int ret = 0, retry = 0;
 
+	#ifndef CONFIG_OPLUS_FEATURE_WIFI_BDF
 	cnss_pr_vdbg("%s PCI link\n", link_up ? "Resuming" : "Suspending");
+	#endif /* CONFIG_OPLUS_FEATURE_WIFI_BDF */
 
 	if (link_up) {
 retry:
@@ -1043,6 +1045,9 @@ int cnss_suspend_pci_link(struct cnss_pci_data *pci_priv)
 		if (pci_set_power_state(pci_priv->pci_dev, PCI_D3hot))
 			cnss_pr_err("Failed to set D3Hot, err =  %d\n", ret);
 	}
+
+	/* Always do PCIe L2 suspend during power off/PCIe link recovery */
+	pci_priv->drv_connected_last = 0;
 
 	ret = cnss_set_pci_link(pci_priv, PCI_LINK_DOWN);
 	if (ret)
@@ -1121,8 +1126,6 @@ int cnss_pci_recover_link_down(struct cnss_pci_data *pci_priv)
 	 */
 	msleep(WAKE_EVENT_TIMEOUT);
 
-	/* Always do PCIe L2 suspend/resume during link down recovery */
-	pci_priv->drv_connected_last = 0;
 	ret = cnss_suspend_pci_link(pci_priv);
 	if (ret)
 		cnss_pr_err("Failed to suspend PCI link, err = %d\n", ret);
@@ -1217,6 +1220,9 @@ static void cnss_pci_handle_linkdown(struct cnss_pci_data *pci_priv)
 	spin_unlock_irqrestore(&pci_link_down_lock, flags);
 
 	reinit_completion(&pci_priv->wake_event);
+
+	/* Notify MHI about link down */
+	mhi_control_error(pci_priv->mhi_ctrl);
 
 	if (pci_dev->device == QCA6174_DEVICE_ID)
 		disable_irq(pci_dev->irq);
@@ -1603,8 +1609,10 @@ static int cnss_pci_set_mhi_state(struct cnss_pci_data *pci_priv,
 	if (ret)
 		goto out;
 
+	#ifndef CONFIG_OPLUS_FEATURE_WIFI_BDF
 	cnss_pr_vdbg("Setting MHI state: %s(%d)\n",
 		     cnss_mhi_state_to_str(mhi_state), mhi_state);
+	#endif /* CONFIG_OPLUS_FEATURE_WIFI_BDF */
 
 	switch (mhi_state) {
 	case CNSS_MHI_INIT:
