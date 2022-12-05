@@ -103,4 +103,5 @@ delete note  and status = "disabled" to "ok"  add here also, other will meet can
 
 / {
 	oppo,dtsi_no = <20627>;
+	oplus,dtsi_no = <20627>;
 };
