@@ -506,11 +506,13 @@ enum ipa3_wdi_polling_mode {
  * @page: skb page
  * @dma_addr: DMA address of this Rx packet
  * @is_tmp_alloc: skb page from tmp_alloc or recycle_list
+ * @page_order: page order associated with the page.
  */
 struct ipa_rx_page_data {
 	struct page *page;
 	dma_addr_t dma_addr;
 	bool is_tmp_alloc;
+	u32 page_order;
 };
 
 struct ipa3_active_client_htable_entry {
@@ -544,7 +546,6 @@ struct ipa_smmu_cb_ctx {
 	u32 va_end;
 	bool shared;
 	bool is_cache_coherent;
-	bool done;
 };
 
 /**
@@ -1445,6 +1446,7 @@ struct ipa3_stats {
 	u32 flow_disable;
 	u32 tx_non_linear;
 	u32 rx_page_drop_cnt;
+	u64 lower_order;
 	struct ipa3_page_recycle_stats page_recycle_stats[2];
 };
 
@@ -2156,8 +2158,6 @@ struct ipa3_context {
 	bool modem_load_ipa_fw;
 	bool fnr_stats_not_supported;
 	bool is_device_crashed;
-	int ipa_pil_load;
-
 };
 
 struct ipa3_plat_drv_res {
@@ -2870,7 +2870,7 @@ int ipa3_inc_client_enable_clks_no_block(struct ipa_active_client_logging_info
 void ipa3_dec_client_disable_clks_no_block(
 	struct ipa_active_client_logging_info *id);
 void ipa3_dec_client_disable_clks_delay_wq(
-		struct ipa_active_client_logging_info *id, unsigned long delay);
+	struct ipa_active_client_logging_info *id, unsigned long delay);
 void ipa3_active_clients_log_dec(struct ipa_active_client_logging_info *id,
 		bool int_ctx);
 void ipa3_active_clients_log_inc(struct ipa_active_client_logging_info *id,
