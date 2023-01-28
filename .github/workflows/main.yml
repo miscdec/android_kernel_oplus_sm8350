@@ -24,7 +24,7 @@ jobs:
         NAME: Dark-Ages-Último
       with:
         arch: arm64
-        compiler: clang/11
+        compiler: clang/6.0/binutils
         defconfig: gki_defconfig
         image: Image.gz-dtb
 
