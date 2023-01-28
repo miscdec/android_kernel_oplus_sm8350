@@ -8,8 +8,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - name: Run a one-line script
-      run: sudo apt install xz
+    - name: Run a one-line script to fix
+      run: sudo apt-get install xz-utils
     - name: Checkout kernel source
       uses: actions/checkout@v2
 
